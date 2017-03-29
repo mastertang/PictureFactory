@@ -1,5 +1,8 @@
 <?php
 namespace PictureFactory\Machine;
+
+use PictureFactory\Exception\PictureException;
+
 class ParamsHandler
 {
 
@@ -21,34 +24,43 @@ class ParamsHandler
         return $result;
     }
 
-    private static function path($data)
+    private static function center($value, $data)
     {
-        return (is_dir($data) || is_file($data)) ? true : false;
+        $valueArray = explode(':', $value);
+        return $valueArray[0]($valueArray[1], $data);
     }
 
-    private static function set($data)
+    private static function dir($value, $data)
     {
-        return (isset($data) && !empty($data) && $data !== '' && $data != NULL) ? true : false;
+        return is_dir($data) ? true : false;
     }
 
-    private static function bool($data)
+    private static function file($value, $data)
     {
-        return is_bool($data);
+        return is_file($data) ? true : false;
     }
 
-    private static function string($data)
+    private static function set($value, $data)
     {
-        return is_string($data);
+        return isset($data) && !empty($data) && $data !== '' && $data != NULL ? true : false;
     }
 
-    private static function color($data)
+    private static function bool($value, $data)
+    {
+        return is_bool($data) ? true : false;
+    }
+
+    private static function string($value, $data)
+    {
+        return is_string($data) ? true : false;
+    }
+
+    private static function color($value, $data)
     {
         $result = true;
         $rgb = [];
         if (is_string($data)) {
-            if (strlen($data) != 7)
-                $result = false;
-            if ($data{0} != '#')
+            if (strlen($data) != 7 || $data{0} != '#')
                 $result = false;
             $rgb[] = hexdec($data{1} . $data{2});
             $rgb[] = hexdec($data{3} . $data{4});
@@ -70,21 +82,26 @@ class ParamsHandler
     private static function max($max, $data)
     {
         $max = (int)$max;
-        return ((int)$data <= $max) ? true : false;
+        return (int)$data <= $max ? true : false;
     }
 
     private static function min($min, $data)
     {
         $min = (int)$min;
-        return ((int)$data >= $min) ? true : false;
+        return (int)$data >= $min ? true : false;
     }
 
-    private static function int($data)
+    private static function int($value, $data)
     {
-        return is_int($data);
+        return is_int($data) ? true : false;
     }
 
-    private static function position($data)
+    private static function arr($value, $data)
+    {
+        return is_array($data) ? true : false;
+    }
+
+    private static function position($value, $data)
     {
         if (!is_array($data))
             return false;
