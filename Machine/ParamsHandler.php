@@ -6,17 +6,15 @@ use PictureFactory\Exception\PictureException;
 class ParamsHandler
 {
 
-    public static function handleStart($rule, $data)
+    public static function handleStart($rule)
     {
         $ruleArray = [];
         $result = [];
         foreach ($rule as $key => $value) {
-            $ruleArray = explode('|', $value);
+            $ruleArray = explode('|', $value[0]);
             foreach ($ruleArray as $value2) {
-                $result[$key] = true;
-                $result = self::center($value2, $data[$key]);
+                $result[$key] = self::center($value2, $value[1]);
                 if (!$result) {
-                    $result[$key] = false;
                     break;
                 }
             }
@@ -32,27 +30,42 @@ class ParamsHandler
 
     private static function dir($value, $data)
     {
-        return is_dir($data) ? true : false;
+        if (!is_dir($data))
+            throw new PictureException('不是文件夹');
+        return true;
     }
 
     private static function file($value, $data)
     {
-        return is_file($data) ? true : false;
+        if (!is_file($data))
+            throw new PictureException('不是文件');
+        return true;
     }
 
     private static function set($value, $data)
     {
-        return isset($data) && !empty($data) && $data !== '' && $data != NULL ? true : false;
+        if (isset($data) &&
+            !empty($data) &&
+            $data !== '' &&
+            $data != NULL
+        )
+            return true;
+        else
+            throw new PictureException('此参数不能为空');
     }
 
     private static function bool($value, $data)
     {
-        return is_bool($data) ? true : false;
+        if (!is_bool($data))
+            throw new PictureException('此参数不是布尔类型');
+        return true;
     }
 
     private static function string($value, $data)
     {
-        return is_string($data) ? true : false;
+        if (!is_string($data))
+            throw new PictureException('此类型不是字符串类型');
+        return true;
     }
 
     private static function color($value, $data)
@@ -76,39 +89,67 @@ class ParamsHandler
                 $result = false;
         } else
             $result = false;
-        return $result;
+        if (!$result)
+            throw new PictureException('此参数不符合color类型');
+        return true;
     }
 
     private static function max($max, $data)
     {
-        $max = (int)$max;
-        return (int)$data <= $max ? true : false;
+        if (is_array($max)) {
+            foreach ($max as $value) {
+                $max = (int)$value;
+                if (!((int)$data <= $max))
+                    throw new PictureException('此参数超出最大值设定范围');
+            }
+        } else {
+            $max = (int)$max;
+            if (!((int)$data <= $max))
+                throw new PictureException('此参数超出最大值设定范围');
+        }
+        return true;
     }
 
     private static function min($min, $data)
     {
-        $min = (int)$min;
-        return (int)$data >= $min ? true : false;
+        if (is_array($min)) {
+            foreach ($min as $value) {
+                $min = (int)$value;
+                if (!((int)$data >= $min))
+                    throw new PictureException('此参数超出最小值设定范围');
+            }
+        } else {
+            $min = (int)$min;
+            if (!((int)$data >= $min))
+                throw new PictureException('此参数超出最小值设定范围');
+        }
+        return true;
     }
 
     private static function int($value, $data)
     {
-        return is_int($data) ? true : false;
+        if (!is_int($data))
+            throw new PictureException('此参数不是整形类型');
+        return true;
     }
 
     private static function arr($value, $data)
     {
-        return is_array($data) ? true : false;
+        if (is_array($data))
+            throw new PictureException('此参数不是array类型');
+        return true;
     }
 
     private static function position($value, $data)
     {
-        if (!is_array($data))
-            return false;
-        if (sizeof($data) < 2)
-            return false;
-        if (!is_int($data[0]) || !is_int($data[1]))
-            return false;
-        return false;
+        if (!is_array($data) ||
+            sizeof($data) < 2 ||
+            !is_int($data[0]) ||
+            !is_int($data[1]) ||
+            $data[0] < 0 ||
+            $data[1] < 0
+        )
+            throw new PictureException('此参数不符合position格式要求');
+        return true;
     }
 }

@@ -2,13 +2,11 @@
 namespace PictureFactory\Machine;
 
 use PictureFactory\Exception\PictureException;
+use PictureFactory\PictureFactory;
 use PictureFactory\PictureInterface\PictureInterface;
 
 class GdMachine implements PictureInterface
 {
-    const RETURN_PATH = 1;
-    const RETURN_RES = 2;
-    const RETURN_IMG_STRING = 3;
     private $nowConfig = NULL;
     private $defaultConfig = [
         'transparent_color' => [254, 254, 254],
@@ -17,30 +15,272 @@ class GdMachine implements PictureInterface
         'font_size' => 15,
     ];
 
-    public function __construct($config = NULL)
+    public function __construct()
     {
         if (!extension_loaded('gd') && !extension_loaded('gd2'))
             throw new PictureException('未安装gd扩展');
-        $configArray = [];
-        if (is_string($config) && is_file($config)) {
-            $configArray = include $config;
-            $this->nowConfig = array($this->defaultConfig, $configArray);
-        } elseif (is_array($configArray))
-            $configArray = $config;
-        $configArray = array($this->defaultConfig, $configArray);
+        $configPath = '../Config/GdConfig';
+        if (is_file($configPath)) {
+            $this->nowConfig = include $configPath;
+        } else {
+            $this->nowConfig = $this->defaultConfig;
+        }
+        $this->nowConfig = array_merge($this->defaultConfig, $this->nowConfig);
         $checkResult = ParamsHandler::handleStart(
             [
-                'transparent_color' => 'color',
-                'font_path' => 'string|path',
-                'font_color' => 'color',
-                'font_size' => 'int|min:1'
-            ], $configArray);
-        $lastArray = [];
-        !$checkResult['transparent_color'] or $lastArray['transparent_color'] = [254, 254, 254];
-        !$checkResult['font_path'] or $lastArray['font_path'] = './';
-        !$checkResult['font_color'] or $lastArray['font_color'] = [255, 255, 255];
-        !$checkResult['font_size'] or $lastArray['font_size'] = 15;
-        $this->nowConfig = array_merge($configArray, $lastArray);
+                'transparent_color' => ['color', $this->nowConfig['transparent_color']],
+                'font_path' => ['string|path', $this->nowConfig['font_path']],
+                'font_color' => ['color', $this->nowConfig['font_color']],
+                'font_size' => ['int|min:1', $this->nowConfig['font_size']]
+            ]);
+        !$checkResult['transparent_color'] or $this->nowConfig['transparent_color'] = [254, 254, 254];
+        !$checkResult['font_path'] or $this->nowConfig['font_path'] = './';
+        !$checkResult['font_color'] or $this->nowConfig['font_color'] = [255, 255, 255];
+        !$checkResult['font_size'] or $this->nowConfig['font_size'] = 15;
+    }
+
+    public function thumbnailImage(
+        $originPicture,
+        $scaleSize,
+        $picQuality = -1,
+        $savePath = NULL,
+        $returnType = 1,
+        $transparentColor = []
+    )
+    {
+        return $this->scale(
+            $originPicture,
+            $scaleSize,
+            $savePath,
+            $picQuality,
+            $returnType,
+            $transparentColor
+        );
+    }
+
+    public function makeGif($images, $savePath)
+    {
+        return true;
+    }
+
+    public function scale(
+        $originPicture,
+        $size,
+        $savePath = NULL,
+        $quality = -1,
+        $returnType = 1,
+        $transparentColor = []
+    )
+    {
+        $originPicInfo = $this->getPictureInfo($originPicture);
+        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
+        $scaleWidth = 0;
+        $scaleHight = 0;
+        $this->checkSize($size, $scaleWidth, $scaleHight);
+        $saveRes = $this->createEmptyImage(
+            $scaleWidth,
+            $scaleHight,
+            empty($transparentColor) ? $this->nowConfig['transparent_color'] : $transparentColor
+        );
+        imagecopyresampled(
+            $saveRes,
+            $originRes,
+            0, 0, 0, 0,
+            $scaleWidth,
+            $scaleHight,
+            $originPicInfo['width'],
+            $originPicInfo['height']
+        );
+        return $this->returnHanler($returnType, $saveRes, $savePath, $quality);
+    }
+
+    public function composition(
+        $backPicture,
+        $frontPicture,
+        $position,
+        $savePath = NULL,
+        $quality = -1,
+        $returnType = 1
+    )
+    {
+        $backInfo = $this->getPictureInfo($backPicture);
+        $frontInfo = $this->getPictureInfo($frontPicture);
+        $backRes = $this->getPicRes($backInfo['suffix'], $backPicture);
+        $frontRes = $this->getPicRes($frontInfo['suffix'], $frontPicture);
+        $x = 0;
+        $y = 0;
+        if (is_array($position)) {
+            if (is_int($position[0]) && $position[0] >= 0
+                &&
+                is_int($position[1] && $position[1] >= 0)
+            ) {
+                $x = $position[0] >= $backInfo['width'] ? $x : $position[0];
+                $y = $position[1] >= $backInfo['height'] ? $y : $position[1];
+            }
+        }
+        imagecopyresampled(
+            $backRes,
+            $frontRes,
+            $x, $y, 0, 0,
+            $backInfo['width'],
+            $backInfo['height'],
+            $frontInfo['width'],
+            $frontInfo['height']
+        );
+        return $this->returnHanler($returnType, $backRes, $savePath, $quality);
+    }
+
+    public function cut(
+        $originPicture,
+        $cutSize,
+        $poition,
+        $savePath = NULL,
+        $quality = -1,
+        $returnType = 1,
+        $transparentColor = []
+    )
+    {
+        $originPicInfo = $this->getPictureInfo($originPicture);
+        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
+        $cutWidth = $cutSize[0];
+        $cutHeight = $cutSize[1];
+        $positionX = $poition[0];
+        $positionY = $poition[1];
+        $cutWidth =
+            ($cutSize[0] + $positionX) > $originPicInfo['width'] ?
+                $originPicture['width'] - $positionX :
+                $cutSize[0];
+        $cutHeight =
+            ($cutSize[1] + $positionY) > $originPicInfo['height'] ?
+                $originPicture['height'] - $positionY :
+                $cutSize[1];
+        $saveRes = $this->createEmptyImage(
+            $cutWidth,
+            $cutHeight,
+            empty($transparentColor) ?
+                $this->nowConfig['transparent_color'] :
+                $transparentColor
+        );
+        imagecopyresampled(
+            $saveRes,
+            $originRes,
+            0, 0, $positionX, $positionY,
+            $cutWidth,
+            $cutHeight,
+            $originPicInfo['width'],
+            $originPicInfo['height']);
+        return $this->returnHanler($returnType, $saveRes, $savePath, $quality);
+    }
+
+    public function rotate(
+        $originPicture,
+        $angle,
+        $savePath = NULL,
+        $quality = -1,
+        $returnType = 1,
+        $transparentColor = []
+    )
+    {
+        $originPicInfo = $this->getPictureInfo($originPicture);
+        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
+        if (!is_int($angle)) throw new PictureException('角度值不合法');
+        $rotateSize = $this->getRotateSize($originPicInfo['width'], $originPicInfo['height'], $angle);
+        $saveRes = $this->createEmptyImage(
+            $rotateSize['width'],
+            $rotateSize['height'],
+            empty($transparentColor) ? $this->nowConfig['transparent_color'] : $transparentColor
+        );
+        imagecopyresampled(
+            $saveRes,
+            $originRes,
+            0, 0, 0, 0,
+            $rotateSize['width'],
+            $rotateSize['height'],
+            $originPicInfo['width'],
+            $originPicInfo['height']);
+        $alphaColour = imagecolorallocatealpha(
+            $saveRes,
+            $transparentColor[0],
+            $transparentColor[1],
+            $transparentColor[2],
+            127);
+        $resultRes = imagerotate($saveRes, $angle, $alphaColour, 0);
+        return $this->returnHanler($returnType, $resultRes, $savePath, $quality);
+    }
+
+    public function text(
+        $originPicture,
+        $position,
+        $string,
+        $angle = 0,
+        $savePath = NULL,
+        $fontFile = NULL,
+        $fontSize = NULL,
+        $fontColor = NULL,
+        $quality = -1,
+        $returnType = 1
+    )
+    {
+        if (empty($string)) throw new PictureException('添加的字符串不能为空');
+        if (empty($fontSize)) $fontSize = $this->nowConfig['font_size'];
+        if (empty($fontFile)) $fontFile = $this->nowConfig['font_path'];
+        if (empty($fontColor)) $fontColor = $this->nowConfig['font_color'];
+        ParamsHandler::handleStart(
+            [
+                'angle' => ['set|int', $angle],
+                'font_size' => ['set|int|min:1', $fontSize],
+                'font_file' => ['set|file', $fontFile],
+                'font_color' => ['set|color', $fontColor],
+                'position' => ['set|arr|position', $position]
+            ]);
+        $originPicInfo = $this->getPictureInfo($originPicture);
+        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
+        $textColor = imagecolorallocate(
+            $originRes,
+            $fontColor[0],
+            $fontColor[1],
+            $fontColor[2]);
+        $result = imagettftext(
+            $originRes,
+            $fontSize,
+            $angle,
+            $position[0],
+            $position[1],
+            $textColor,
+            $fontFile,
+            $string);
+        return $this->returnHanler($returnType, $originRes, $savePath, $quality);
+    }
+
+    public function changeConfig($params = NULL)
+    {
+        if (!empty($params)) {
+            $roler = [];
+            $data = [];
+            if (!empty($params['transparent_color'])) {
+                $roler['transparent_color'] = ['color',$params['transparent_color']];
+            }
+            if (!empty($params['font_path'])) {
+                $roler['font_path'] = ['file',$params['font_path']];
+            }
+            if (!empty($params['font_color'])) {
+                $roler['font_color'] = ['color',$params['font_color']];
+            }
+            if (!empty($params['font_size'])) {
+                $roler['font_size'] = ['int|min:1',$params['font_size']];
+            }
+            try {
+                ParamsHandler::handleStart($roler);
+                if (!$data['transparent_color']) unset($data['transparent_color']);
+                if (!$data['font_path']) unset($data['font_path']);
+                if (!$data['font_color']) unset($data['font_color']);
+                if (!$data['font_size']) unset($data['font_size']);
+                array_merge($this->nowConfig, $data);
+            }catch (\Exception $e){
+                return true;
+            }
+        }
+        return true;
     }
 
     private function getPictureInfo($string)
@@ -53,7 +293,11 @@ class GdMachine implements PictureInterface
                 $info = getimagesize($string);
                 if ($info === false)
                     throw new PictureException('图片路径错误');
-                if ($info[0] <= 0 || $info[1] <= 0 || $info[2] < 1 || $info[2] > 16)
+                if ($info[0] <= 0 ||
+                    $info[1] <= 0 ||
+                    $info[2] < 1 ||
+                    $info[2] > 16
+                )
                     throw new PictureException('不是图片类型文件');
                 $result['width'] = $info[0];
                 $result['height'] = $info[1];
@@ -194,22 +438,30 @@ class GdMachine implements PictureInterface
         return $res;
     }
 
-    private function savePicture($type, $res, $savePath)
+    private function savePicture($type, &$res, $savePath, $quality = 100)
     {
-        if ($type == 'jpg' || $type == 'jpeg')
-            imagejpeg($res, $savePath);
-        else if ($type == 'bmg')
+        if ($type == 'jpg' || $type == 'jpeg') {
+            if ($quality < 0 || $quality > 100) $quality = 100;
+            imagejpeg($res, $savePath, $quality);
+        } else if ($type == 'bmg')
             image2wbmp($res, $savePath);
         else if ($type == 'gif')
             imagegif($res, $savePath);
-        else
-            imagepng($res, $savePath);
+        else {
+            $quality = ($quality >= 0 && $quality <= 9) ? (int)$quality : 9;
+            imagepng($res, $savePath, $quality);
+        }
+        imagedestroy($res);
     }
 
     private function checkSize($size, &$width, &$height)
     {
         if (is_array($size)) {
-            if (!is_int($size[0]) || !is_int($size[1]) || $size[0] < 1 || $size[1] < 1)
+            if (!is_int($size[0]) ||
+                !is_int($size[1]) ||
+                $size[0] < 1 ||
+                $size[1] < 1
+            )
                 throw new PictureException('scale 的伸缩尺寸为数组时数值格式错误');
             $width = $size[0];
             $height = $size[1];
@@ -267,246 +519,18 @@ class GdMachine implements PictureInterface
         ];
     }
 
-    private function returnHanler($returnType, $res, $savePath)
+    private function returnHanler($returnType, $res, $savePath, $quality)
     {
-        if ($returnType == self::RETURN_RES) {
+        if ($returnType == PictureFactory::RETURN_RES) {
             return $res;
-        } elseif ($returnType == self::RETURN_IMG_STRING) {
+        } elseif ($returnType == PictureFactory::RETURN_IMG_STRING) {
             $saveInfo = $saveInfo = $this->getSavePathInfo($savePath);
-            $this->savePicture($saveInfo['suffix'], $res, $savePath);
+            $this->savePicture($saveInfo['suffix'], $res, $savePath, $quality);
             return file_get_contents($savePath);
-        } elseif ($returnType == self::RETURN_PATH) {
+        } elseif ($returnType == PictureFactory::RETURN_PATH) {
             $saveInfo = $saveInfo = $this->getSavePathInfo($savePath);
-            $this->savePicture($saveInfo['suffix'], $res, $savePath);
+            $this->savePicture($saveInfo['suffix'], $res, $savePath, $quality);
             return $savePath;
         }
-    }
-
-    public function scale(
-        $size,
-        $originPicture,
-        $savePath = '',
-        $returnType = self::RETURN_IMG_STRING,
-        $transparentColor = []
-    )
-    {
-        $originPicInfo = $this->getPictureInfo($originPicture);
-        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
-        $scaleWidth = 0;
-        $scaleHight = 0;
-        $this->checkSize($size, $scaleWidth, $scaleHight);
-        $saveRes = $this->createEmptyImage(
-            $scaleWidth,
-            $scaleHight,
-            empty($transparentColor) ? $this->nowConfig['transparent_color'] : $transparentColor
-        );
-        imagecopyresampled(
-            $saveRes,
-            $originRes,
-            0, 0, 0, 0,
-            $scaleWidth,
-            $scaleHight,
-            $originPicInfo['width'],
-            $originPicInfo['height']
-        );
-        return $this->returnHanler($returnType, $saveRes, $savePath);
-    }
-
-    public function composition(
-        $backPicture,
-        $frontPicture,
-        $position,
-        $savePath = '',
-        $returnType = self::RETURN_IMG_STRING
-    )
-    {
-        $backInfo = $this->getPictureInfo($backPicture);
-        $frontInfo = $this->getPictureInfo($frontPicture);
-        $backRes = $this->getPicRes($backInfo['suffix'], $backPicture);
-        $frontRes = $this->getPicRes($frontInfo['suffix'], $frontPicture);
-        $x = 0;
-        $y = 0;
-        if (is_array($position)) {
-            if (is_int($position[0]) && $position[0] >= 0
-                &&
-                is_int($position[1] && $position[1] >= 0)
-            ) {
-                $x = $position[0] >= $backInfo['width'] ? $x : $position[0];
-                $y = $position[1] >= $backInfo['height'] ? $y : $position[1];
-            }
-        }
-        imagecopyresampled(
-            $backRes,
-            $frontRes,
-            $x, $y, 0, 0,
-            $backInfo['width'],
-            $backInfo['height'],
-            $frontInfo['width'],
-            $frontInfo['height']
-        );
-        return $this->returnHanler($returnType, $backRes, $savePath);
-    }
-
-    public function cut(
-        $originPicture,
-        $cutSize,
-        $poition,
-        $savePath = '',
-        $transparentColor = [],
-        $returnType = self::RETURN_IMG_STRING
-    )
-    {
-        $originPicInfo = $this->getPictureInfo($originPicture);
-        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
-        $cutWidth = $cutSize[0];
-        $cutHeight = $cutSize[1];
-        $positionX = $poition[0];
-        $positionY = $poition[1];
-        $cutWidth =
-            ($cutSize[0] + $positionX) > $originPicInfo['width'] ?
-                $originPicture['width'] - $positionX :
-                $cutSize[0];
-        $cutHeight =
-            ($cutSize[1] + $positionY) > $originPicInfo['height'] ?
-                $originPicture['height'] - $positionY :
-                $cutSize[1];
-        $saveRes = $this->createEmptyImage(
-            $cutWidth,
-            $cutHeight,
-            empty($transparentColor) ?
-                $this->nowConfig['transparent_color'] :
-                $transparentColor
-        );
-        imagecopyresampled(
-            $saveRes,
-            $originRes,
-            0, 0, $positionX, $positionY,
-            $cutWidth,
-            $cutHeight,
-            $originPicInfo['width'],
-            $originPicInfo['height']);
-        return $this->returnHanler($returnType, $saveRes, $savePath);
-    }
-
-    public function rotate(
-        $originPicture,
-        $angle,
-        $savePath = '',
-        $transparentColor = [],
-        $returnType = self::RETURN_IMG_STRING
-    )
-    {
-        $originPicInfo = $this->getPictureInfo($originPicture);
-        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
-        if (!is_int($angle))
-            throw new PictureException('角度值不合法');
-        $rotateSize = $this->getRotateSize($originPicInfo['width'], $originPicInfo['height'], $angle);
-        $saveRes = $this->createEmptyImage(
-            $rotateSize['width'],
-            $rotateSize['height'],
-            empty($transparentColor) ? $this->nowConfig['transparent_color'] : $transparentColor
-        );
-        imagecopyresampled(
-            $saveRes,
-            $originRes,
-            0, 0, 0, 0,
-            $rotateSize['width'],
-            $rotateSize['height'],
-            $originPicInfo['width'],
-            $originPicInfo['height']);
-        $alphaColour = imagecolorallocatealpha(
-            $saveRes,
-            $transparentColor[0],
-            $transparentColor[1],
-            $transparentColor[2],
-            127);
-        $resultRes = imagerotate($saveRes, $angle, $alphaColour, 0);
-        return $this->returnHanler($returnType, $resultRes, $savePath);
-    }
-
-    public function text(
-        $originPicture,
-        $position,
-        $string,
-        $angle = 0,
-        $savePath = '',
-        $returnType = self::RETURN_IMG_STRING,
-        $fontSize = NULL,
-        $fontFile = NULL,
-        $fontColor = NULL
-    )
-    {
-        if (empty($string)) throw new PictureException('添加的字符串不能为空');
-        if (empty($fontSize)) $fontSize = $this->nowConfig['font_size'];
-        if (empty($fontFile)) $fontFile = $this->nowConfig['font_path'];
-        if (empty($fontColor)) $fontColor = $this->nowConfig['font_color'];
-        $checkResult = ParamsHandler::handleStart(
-            [
-                'angle' => 'set|int',
-                'font_size' => 'set|int|min:1',
-                'font_file' => 'set|file',
-                'font_color' => 'set|color',
-                'position' => 'set|arr|position'
-            ],
-            [
-                'angle' => $angle,
-                'font_size' => $fontSize,
-                'font_file' => $fontFile,
-                'font_color' => $fontColor,
-                'position' => $position
-            ]);
-        if (!$checkResult['font_file']) throw new PictureException('字体文件路径错误');
-        $checkResult['angle'] or $angle = 0;
-        $checkResult['font_size'] or $fontSize = 15;
-        $checkResult['font_color'] or $fontColor = [254, 254, 254];
-        $checkResult['position'] or $position = [0, 0];
-        $originPicInfo = $this->getPictureInfo($originPicture);
-        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
-        $textColor = imagecolorallocate(
-            $originRes,
-            $fontColor[0],
-            $fontColor[1],
-            $fontColor[2]);
-        $result = imagettftext(
-            $originRes,
-            $fontSize,
-            $angle,
-            $position[0],
-            $position[1],
-            $textColor,
-            $fontFile,
-            $string);
-        return $this->returnHanler($returnType, $originRes, $savePath);
-    }
-
-    public function changeConfig($params = NULL)
-    {
-        if (!empty($params)) {
-            $roler = [];
-            $data = [];
-            if (!empty($params['transparent_color'])) {
-                $roler['transparent_color'] = 'color';
-                $data['transparent_color'] = $params['transparent_color'];
-            }
-            if (!empty($params['font_path'])) {
-                $roler['font_path'] = 'file';
-                $data['font_path'] = $params['font_path'];
-            }
-            if (!empty($params['font_color'])) {
-                $roler['font_color'] = 'color';
-                $data['font_color'] = $params['font_color'];
-            }
-            if (!empty($params['font_size'])) {
-                $roler['font_size'] = 'int|min:1';
-                $data['font_size'] = $params['font_size'];
-            }
-            $checkResult = ParamsHandler::handleStart($roler, $data);
-            if (!$data['transparent_color']) unset($data['transparent_color']);
-            if (!$data['font_path']) unset($data['font_path']);
-            if (!$data['font_color']) unset($data['font_color']);
-            if (!$data['font_size']) unset($data['font_size']);
-            array_merge($this->nowConfig, $data);
-        }
-        return true;
     }
 }
