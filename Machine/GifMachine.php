@@ -21,6 +21,7 @@ class GifMachine
     private $defaultConfig = [
         'transparent_color' => [254, 254, 254],
         'disposal_method' => 0,
+        'temp_path' => './',
         'delay' => 1,
         'loop' => 1,
         'offset' => 0
@@ -33,52 +34,80 @@ class GifMachine
             $this->config = include $configPath;
         $this->config = array_merge($this->defaultConfig, $this->config);
         ParamsHandler::handleStart([
-            'delay' => ['set|int|min:0', $this->config['delay']],
             'transparent_color' => ['set|arr|color', $this->config['transparent_color']],
-            'loop' => ['set|int|min:1', $this->config['loop']],
             'disposal_method' => ['set|int|min:0', $this->config['disposal_method']],
-            'offset' => ['set', $this->config['offset']]
+            'delay' => ['set|min:0', $this->config['delay']],
+            'loop' => ['set|int|min:1', $this->config['loop']],
+            'offset' => ['set|min:0', $this->config['offset']]
         ]);
+        if (empty($this->config['temp_path'])) $this->config['temp_path'] = './';
+        if (!is_dir($this->config['temp_path'])) {
+            $mkresult = mkdir($this->config['temp_path'], 0775);
+            if (!$mkresult) throw new PictureException('临时文件夹创建失败');
+        }
     }
 
-    public function gifStart($picturePath, $tempPath, $savePath)
+    private function checkStartParams(&$picturePath, &$savePath, &$tempPath, &$saveName)
     {
+        if (!is_array($picturePath))
+            $picturePath = [$picturePath];
+        if (empty($savePath)) {
+            throw new PictureException('保存路径不能为空');
+        } else {
+            $info = explode('.', basename($savePath));
+            if (empty($info[0]) ||
+                empty($info[1]) ||
+                strtolower($info[1]) != 'gif'
+            ) {
+                throw new PictureException('保存路径格式错误');
+            }
+            $saveName = $info[0];
+        }
         if (!empty($tempPath) && !is_dir($tempPath)) {
             if (!mkdir($tempPath, 0775))
                 throw new PictureException('临时文件保存路径创建失败');
-        } else
-            $tempPath = './';
+        } else {
+            $tempPath = $this->config['temp_path'];
+        }
+    }
+
+    public function gifStart($picturePath, $savePath, $tempPath = '')
+    {
+        $saveName = NULL;
+        $this->checkStartParams($picturePath, $savePath, $tempPath, $saveName);
         $tempPicPath = [];
         foreach ($picturePath as $picture) {
             $pictureInfo = getimagesize($picture);//获取图片信息
-            $width = $pictureInfo[0];
-            $height = $pictureInfo[1];
-            $pictureSource = $this->createImage($picturePath, $pictureInfo['mime']);  //获取图片资源
+            $pictureSource = $this->createImage($picturePath, $pictureInfo['mime']);
+            if (is_resource($pictureSource))
+                continue;
             $newCanvasSource = NULL;
-            $this->createCanvas($newCanvasSource, $width, $height);
+            $this->createCanvas($newCanvasSource, $pictureInfo[0], $pictureInfo[1]);
             $result = imagecopyresampled(
                 $newCanvasSource,
                 $pictureSource,
                 0, 0, 0, 0,
-                $width,
-                $height,
-                $width,
-                $height);
+                $pictureInfo[0],
+                $pictureInfo[1],
+                $pictureInfo[0],
+                $pictureInfo[1]);
             if (empty($result)) continue;
-            $pictureTempPath = $tempPath . uniqid() . '.gif';               //设置保存图片的路径和名字
+            $pictureTempPath = $tempPath . DIRECTORY_SEPARATOR . $saveName . uniqid() . '.gif';
             $tempPicPath[] = $pictureTempPath;
-
-            imagegif($newCanvasSource, $pictureTempPath);                   //保存图片
+            imagegif($newCanvasSource, $pictureTempPath);
             imagedestroy($newCanvasSource);
             imagedestroy($pictureSource);
             $pictureInfo = NULL;
             $pictureSource = NULL;
             $newCanvasSource = NULL;
             $pictureTempPath = NULL;
-            $width = 0;
-            $height = 0;
         }
+        if (empty($tempPicPath)) throw new PictureException('所有素材文件都错误');
+        return $this->start($tempPicPath, $savePath);
+    }
 
+    private function start(&$tempPicPath, &$savePath)
+    {
         try {
             $gif = new GifEncoder(
                 $tempPicPath,
@@ -97,7 +126,6 @@ class GifMachine
         } catch (\Exception $e) {
             return false;
         }
-
         foreach ($tempPicPath as $picture) {
             unlink($picture);
         }

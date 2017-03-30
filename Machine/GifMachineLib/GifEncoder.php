@@ -56,17 +56,16 @@ namespace PictureFactory\Machine\GifMachineLib;
 
 Class GifEncoder
 {
-    var $mGifHeader = "GIF89a";//GIF文件头
-    var $mVersion = "GIF Encode V1.0";//此类的版本
-    var $mPictureBuffer = [];//图片素材文件buffer
-    var $mPictureOffest = [];//每个图片的位移
-    var $SIG = 0;//
-    var $mLoopPlay = 0;//是否循环播放的标识
-    var $mDisposalMethod = 2;//处置方法 0 1 2 3 四种
-    var $mColor = -1;//有无的颜色标识
-    var $mImage = -1;//有无图像数据内容
-    private $mDelayTime = [];              //延时时间
-    private $mErrorIndex = '';
+    private $gifHeader = "GIF89a";
+    private $mVersion = "GIF Encode V1.0";
+    private $picture = [];
+    private $Offest = [];
+    private $SIG = 0;
+    private $loop = 0;
+    private $disposalMethod = 2;//处置方法 0 1 2 3 四种
+    private $color = -1;
+    private $mImage = -1;
+    private $delayTime = [];
 
     /**
      * [构造函数]
@@ -79,11 +78,10 @@ Class GifEncoder
      * @param [String] $_blueColor            [蓝颜色值]
      * @param [array]  $_offest                [图片偏移]
      */
-    function __construct($_resource, $_delayTime, $_loopFlag, $_disposalMethod, $_redColor, $_greenColor, $_blueColor, $_offest)
+    function __construct(&$resource, &$delayTime, &$loopFlag, &$disposalMethod, &$offest, &$color)
     {
-        if (!is_array($_resource) && !is_array($_delayTime)) {    //检查图片变量和图片延时变量是否是数组
-            $this->mErrorIndex = empty($this->mErrorIndex) ? $this->mErrorIndex : 'ERROO';
-        }
+        $this->picture = $resource;
+        $resourceSize = sizeof($this->picture);
         if (is_array($_offest) && count($_offest) > 1) {            //检查图片位移变量是否是数组且不空
             $this->SIG = 1;
             $this->mPictureOffest = $_offest;
