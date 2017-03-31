@@ -103,25 +103,22 @@ class GifMachine
             $pictureTempPath = NULL;
         }
         if (empty($tempPicPath)) throw new PictureException('所有素材文件都错误');
-        return $this->start($tempPicPath, $savePath);
+        return $this->start($tempPicPath, $savePath, $color);
     }
 
-    private function start(&$tempPicPath, &$savePath)
+    private function start(&$tempPicPath, &$savePath, &$color)
     {
         try {
             $gif = new GifEncoder(
                 $tempPicPath,
-                $this->mDelayTime,
-                $this->mloopFlag,
-                $this->mDisposalMethod, //构造函数传入参数初始化
-                $this->mTransparentColor[0],
-                $this->mTransparentColor[1],
-                $this->mTransparentColor[2],
-                $this->mOffest);
-            $result = $gif->encodeStart();          //开始进行合成
-            if (!$result) throw new PictureException('合成错误');
+                $this->delayTime,
+                $this->loopFlag,
+                $this->disposalMethod, //构造函数传入参数初始化
+                $this->offest,
+                $color);
+            $gif->encodeStart();          //开始进行合成
             $file = fopen($savePath, 'w');//把二进制数据写入文件
-            fwrite($file, $gif->GetAnimation());
+            fwrite($file, $gif->getAnimation());
             fclose($file);
         } catch (\Exception $e) {
             return false;
