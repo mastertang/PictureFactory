@@ -16,5 +16,7 @@ interface PictureInterface
 
     public function makeGif($images,$savePath);
 
+    public function makeIdentifyCodePicture($code,$savePath);
+
     public function changeConfig($params = NULL);
 }

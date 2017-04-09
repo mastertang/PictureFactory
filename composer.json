@@ -1,0 +1,21 @@
+{
+  "name":             "mastertang/picturefactory",
+  "description": "php图片处理工厂",
+  "keywords":         ["picture", "cut","rotate","composition","thumbnailImage","gif","IdentifyCodePicture","scale","draw text","php","face detector"],
+  "time":             "2017-4-9",
+  "license" : "MIT",
+  "autoload":{
+    "psr-4":{
+      "PictureFactory\\":"./"
+    }
+  },
+  "authors": [{
+    "name":         "RuiHua Tang",
+    "email":        "547740900@qq.com",
+    "homepage":     "https://github.com/mastertang/PictureFactory",
+    "role":         "Programmer"
+  }],
+  "require":{
+        "php": ">=5.3.0"
+   }
+}

@@ -43,16 +43,16 @@ class ImagickMachine implements PictureInterface
             $roler = [];
             $data = [];
             if (!empty($params['transparent_color'])) {
-                $roler['transparent_color'] = ['color',$params['transparent_color']];
+                $roler['transparent_color'] = ['color', $params['transparent_color']];
             }
             if (!empty($params['font_path'])) {
-                $roler['font_path'] = ['file',$params['font_path']];
+                $roler['font_path'] = ['file', $params['font_path']];
             }
             if (!empty($params['font_color'])) {
-                $roler['font_color'] = ['color',$params['font_color']];
+                $roler['font_color'] = ['color', $params['font_color']];
             }
             if (!empty($params['font_size'])) {
-                $roler['font_size'] = ['int|min:1',$params['font_size']];
+                $roler['font_size'] = ['int|min:1', $params['font_size']];
             }
             try {
                 ParamsHandler::handleStart($roler);
@@ -61,7 +61,7 @@ class ImagickMachine implements PictureInterface
                 if (!$data['font_color']) unset($data['font_color']);
                 if (!$data['font_size']) unset($data['font_size']);
                 array_merge($this->nowConfig, $data);
-            }catch (\Exception $e){
+            } catch (\Exception $e) {
                 return true;
             }
         }
@@ -274,6 +274,55 @@ class ImagickMachine implements PictureInterface
         } else
             $imageick->annotateImage($imageDraw, $position[0], $position[1], $angle, $string);
         return $this->returnHandler($imageick, $savePath, $returnType, $quality);
+    }
+
+    public function makeIdentifyCodePicture(
+        $code,
+        $savePath,
+        $params = [],
+        $quality = -1,
+        $returnType = 1
+    )
+    {
+        $defaultCofing = [
+            'size' => [100, 100],
+            'position' => [20, 30],
+            'noise_count' => rand(10, 20),
+            'color' => [
+                [255, 0, 0],
+                [0, 255, 0],
+                [0, 0, 255],
+                [0, 0, 0],
+                [0, 255, 255],
+                [255, 255, 0],
+                [255, 0, 255]
+            ],
+            'font_size' => rand(13, 18),
+            'font_path' => './Attrl.ttl'
+        ];
+        if (!empty($params)) $defaultCofing = array_merge($defaultCofing, $params);
+        ParamsHandler::handleStart([
+            'code' => ['set|string', $code],
+            'position' => ['set|arr|position', $defaultCofing['position']],
+            'noise_count' => ['set|int|min:1', $defaultCofing['noise_count']],
+            'color' => ['set|arr', $defaultCofing['color']],
+            'font_size' => ['set|int|min:1', $defaultCofing['font_size']],
+            'font_path' => ['set|file']
+        ]);
+        $imageIck = new \Imagick();
+        $pixel = new \ImagickPixel('white');
+        $imageIck->newImage($defaultCofing['size'][0], $defaultCofing['size'][1], $pixel);
+        $draw = new \ImagickDraw();
+        $draw->setFont($defaultCofing['font_path']);
+        $draw->setFontSize($defaultCofing['font_size']);
+        $imageIck->annotateImage(
+            $draw,
+            $defaultCofing['position'][0],
+            $defaultCofing['position'][1],
+            rand(0, 45),
+            $code);
+        $imageIck->addNoiseImage(\Imagick::NOISE_POISSON, \Imagick::CHANNEL_OPACITY);
+        return $this->returnHandler($imageIck, $savePath, $returnType, $quality);
     }
 
     private function supportPicture($type)

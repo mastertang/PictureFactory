@@ -23,6 +23,7 @@ class PictureFactory
         if (!class_exists($machineClass))
             throw new PictureException("不存在{$machineClass}类");
         $this->machineInstance = new $machineClass();
+        return $this->machineInstance;
     }
 
     public function swiftMachine($machineName = NULL)
@@ -38,7 +39,16 @@ class PictureFactory
                 throw new PictureException("不存在{$machineClass}类");
             $this->machineInstance = new $machineClass();
         }
-        return true;
+        return $this->machineInstance;
+    }
+
+    public static function faceDetector($xmlPath, $pictureData)
+    {
+        if (!extension_loaded('face_detector')) {
+            throw new PictureException('未安装face_detector扩展');
+        }
+        $data = face_detector($xmlPath, $pictureData);
+        return json_decode($data);
     }
 
     public function instance()

@@ -140,6 +140,13 @@ class ParamsHandler
         return true;
     }
 
+    private static function size($value, $data)
+    {
+        if (!is_int($data[0]) || !is_int($data[1]) || $data[0] < 1 || $data[1] < 1)
+            throw new PictureException('此参数不符合size结构');
+        return true;
+    }
+
     private static function position($value, $data)
     {
         if (!is_array($data) ||

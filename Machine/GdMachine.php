@@ -58,9 +58,10 @@ class GdMachine implements PictureInterface
         );
     }
 
-    public function makeGif($images, $savePath)
+    public function makeGif($images, $savePath , $tempPath='')
     {
-        return true;
+        $gifMachine = new GifMachine();
+        return $gifMachine->gifStart($images,$savePath,$tempPath);
     }
 
     public function scale(
@@ -252,22 +253,104 @@ class GdMachine implements PictureInterface
         return $this->returnHanler($returnType, $originRes, $savePath, $quality);
     }
 
+    public function makeIdentifyCodePicture(
+        $code,
+        $savePath,
+        $params = [],
+        $returnType = 1,
+        $quality = 100
+    )
+    {
+        $defaultCofing = [
+            'size' => [100, 100],
+            'position' => [20, 30],
+            'noise_count' => rand(10, 20),
+            'color' => [
+                [255, 0, 0],
+                [0, 255, 0],
+                [0, 0, 255],
+                [0, 0, 0],
+                [0, 255, 255],
+                [255, 255, 0],
+                [255, 0, 255]
+            ],
+            'font_size' => rand(13, 18),
+            'font_path' => './Attrl.ttl'
+        ];
+        if (!empty($params)) $defaultCofing = array_merge($defaultCofing, $params);
+        ParamsHandler::handleStart([
+            'code' => ['set|string', $code],
+            'position' => ['set|arr|position', $defaultCofing['position']],
+            'noise_count' => ['set|int|min:1', $defaultCofing['noise_count']],
+            'color' => ['set|arr', $defaultCofing['color']],
+            'font_size' => ['set|int|min:1', $defaultCofing['font_size']],
+            'font_path' => ['set|file']
+        ]);
+        $image = imagecreate($defaultCofing['size'][0], $defaultCofing['size'][1]);
+        imagefill(
+            $image,
+            0,
+            0,
+            imagecolorallocate($image, 255, 255, 255)
+        );
+        $this->text(
+            $image,
+            $defaultCofing['position'],
+            $code,
+            rand(0, 45),
+            $defaultCofing['font_path'],
+            $defaultCofing['font_size'],
+            [0, 0, 0],
+            100,
+            PictureFactory::RETURN_RES
+        );
+        $colorSize = sizeof($defaultCofing['color']);
+        $tempColor = NULL;
+        for ($i = 0; $i < $defaultCofing['noise_count']; $i++) {
+            $color = $defaultCofing['color'][rand(0, $colorSize - 1)];
+            $point1_x = rand(0, $defaultCofing['size'][0]);
+            $point1_y = rand(0, $defaultCofing['size'][1]);
+            $point2_x = rand(1, 2) == 1 ? $point1_x + rand(1, 4) : $point1_x - rand(1, 4);
+            $point2_y = rand(1, 2) == 1 ? $point1_y + rand(1, 4) : $point1_y - rand(1, 4);
+            $tempColor = imagecolorallocate($image, $color[0], $color[1], $color[2]);
+            imageline(
+                $image,
+                $point1_x,
+                $point1_y,
+                $point2_x,
+                $point2_y,
+                $tempColor
+            );
+        }
+        for ($i = 0; $i < $defaultCofing['noise_count']; $i++) {
+            $color = $defaultCofing['color'][rand(0, $colorSize - 1)];
+            $tempColor = imagecolorallocate($image, $color[0], $color[1], $color[2]);
+            imagesetpixel(
+                $image,
+                rand(0, $defaultCofing['size'][0]),
+                rand(0, $defaultCofing['size'][1]),
+                $tempColor
+            );
+        }
+        return $this->returnHanler($returnType, $image, $savePath, $quality);
+    }
+
     public function changeConfig($params = NULL)
     {
         if (!empty($params)) {
             $roler = [];
             $data = [];
             if (!empty($params['transparent_color'])) {
-                $roler['transparent_color'] = ['color',$params['transparent_color']];
+                $roler['transparent_color'] = ['color', $params['transparent_color']];
             }
             if (!empty($params['font_path'])) {
-                $roler['font_path'] = ['file',$params['font_path']];
+                $roler['font_path'] = ['file', $params['font_path']];
             }
             if (!empty($params['font_color'])) {
-                $roler['font_color'] = ['color',$params['font_color']];
+                $roler['font_color'] = ['color', $params['font_color']];
             }
             if (!empty($params['font_size'])) {
-                $roler['font_size'] = ['int|min:1',$params['font_size']];
+                $roler['font_size'] = ['int|min:1', $params['font_size']];
             }
             try {
                 ParamsHandler::handleStart($roler);
@@ -276,7 +359,7 @@ class GdMachine implements PictureInterface
                 if (!$data['font_color']) unset($data['font_color']);
                 if (!$data['font_size']) unset($data['font_size']);
                 array_merge($this->nowConfig, $data);
-            }catch (\Exception $e){
+            } catch (\Exception $e) {
                 return true;
             }
         }

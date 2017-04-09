@@ -322,7 +322,7 @@ Class GifEncoder
         return (chr($_int & 0xFF) . chr(($_int >> 8) & 0xFF));
     }
 
-    private function getAnimation()
+    public function getAnimation()
     {
         return ($this->newGifDinary);
     }
