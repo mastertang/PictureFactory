@@ -179,11 +179,13 @@
     $quality = 图片保存质量,jpg的值范围1-100,png值范围0-9
     $returnType = 返回数据类型
 ````   
-* makeGif($images, $savePath)
+* makeGif($images, $savePath , $delay = 100 , $dispose = 2)
 ````
     说明 : 生成gif图片
     $images = 数组,gif图片素材,元素可以是资源resource,也可以是图片路径
     $savePath = gif图片保存路径
+    $delay = 图片播放间隔
+    $dispose = 图片处理方式
 ````
 * composition(    
             $backPicture,$frontPicture,$position,    

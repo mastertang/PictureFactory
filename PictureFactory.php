@@ -16,13 +16,14 @@ class PictureFactory
             $machineName = 'Gd';
         $machineName = ucfirst($machineName);
         $machineClass = "{$machineName}Machine";
+        $nameSpace = "PictureFactory\\Machine\\{$machineClass}";
         $machinePath = __DIR__ . "/Machine/{$machineClass}.php";
         if (!file_exists($machinePath))
             throw new PictureException("不存在{$machineName}文件");
         require $machinePath;
-        if (!class_exists($machineClass))
+        if (!class_exists($nameSpace))
             throw new PictureException("不存在{$machineClass}类");
-        $this->machineInstance = new $machineClass();
+        $this->machineInstance = new $nameSpace();
         return $this->machineInstance;
     }
 
@@ -39,7 +40,7 @@ class PictureFactory
                 throw new PictureException("不存在{$machineClass}类");
             $this->machineInstance = new $machineClass();
         }
-        return $this->machineInstance;
+        return true;
     }
 
     public static function faceDetector($xmlPath, $pictureData)

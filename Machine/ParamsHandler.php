@@ -25,7 +25,16 @@ class ParamsHandler
     private static function center($value, $data)
     {
         $valueArray = explode(':', $value);
-        return $valueArray[0]($valueArray[1], $data);
+        $func = $valueArray[0];
+        var_dump($data);
+        return self::$func($valueArray[1], $data);
+    }
+
+    private static function path($value, $data)
+    {
+        if (!is_file($data) && !is_dir($data))
+            throw new PictureException('不是路径字符串');
+        return true;
     }
 
     private static function dir($value, $data)
@@ -50,7 +59,9 @@ class ParamsHandler
             $data != NULL
         )
             return true;
-        else
+        elseif ($data == 0) {
+            return true;
+        } else
             throw new PictureException('此参数不能为空');
     }
 
@@ -135,15 +146,8 @@ class ParamsHandler
 
     private static function arr($value, $data)
     {
-        if (is_array($data))
+        if (!is_array($data))
             throw new PictureException('此参数不是array类型');
-        return true;
-    }
-
-    private static function size($value, $data)
-    {
-        if (!is_int($data[0]) || !is_int($data[1]) || $data[0] < 1 || $data[1] < 1)
-            throw new PictureException('此参数不符合size结构');
         return true;
     }
 

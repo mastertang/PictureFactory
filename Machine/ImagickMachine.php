@@ -17,18 +17,16 @@ class ImagickMachine implements PictureInterface
 
     public function __construct()
     {
-        if (!extension_loaded('imagemagick'))
+        if (!extension_loaded('imagick'))
             throw new PictureException('未安装ImageMagick扩展');
-        $configPath = '../Config/ImageickConfig.php';
+        $configPath = __DIR__ . '/../Config/ImageickConfig.php';
         if (is_file($configPath)) {
             $this->nowConfig = include $configPath;
         } else $this->nowConfig = $configPath;
         $this->nowConfig = array_merge($this->defaultConfig, $this->nowConfig);
         $checkResult = ParamsHandler::handleStart(
             [
-                'transparent_color' => ['color', $this->nowConfig['transparent_color']],
                 'font_path' => ['string|path', $this->nowConfig['font_path']],
-                'font_color' => ['color', $this->nowConfig['font_color']],
                 'font_size' => ['int|min:1', $this->nowConfig['font_size']]
             ]);
         !$checkResult['transparent_color'] or $this->nowConfig['transparent_color'] = [254, 254, 254];
@@ -93,12 +91,14 @@ class ImagickMachine implements PictureInterface
         return $this->returnHandler($imageick, $savePath, $returnType, $quality);
     }
 
-    public function makeGif($images, $savePath)
+    public function makeGif($images, $savePath, $delay = 100, $dispose = 2)
     {
         ParamsHandler::handleStart(
             [
                 'images' => ['set', $images],
-                'path' => ['set', $images]
+                'path' => ['set', $images],
+                'delay' => ['set|int|min:0', $delay],
+                'dispose' => ['set|int|min:0', $dispose]
             ]);
         $imageick = NULL;
         if (is_array($images)) {
@@ -111,14 +111,14 @@ class ImagickMachine implements PictureInterface
                 elseif (is_string($image))
                     $tempick->readImageBlob($image);
                 $imageick->addImage($tempick);
+                $imageick->setImageDelay(100);
+                $imageick->setImageDispose(2);
             }
         } elseif (is_string($images)) {
             $imageick = new \Imagick($images);
         } else
             throw new PictureException('图片参数格式错误');
-        $imageick->coalesceImages();
-        $imageick->optimizeImageLayers();
-        $imageick->writeImage($savePath);
+        $imageick->writeImages($savePath, true);
         return $savePath;
     }
 
@@ -165,6 +165,12 @@ class ImagickMachine implements PictureInterface
                 'cut_size' => ['set|arr|min:0', $cutSize],
                 'position' => ['set|arr|position|min:0', $position],
             ]);
+        if ($position[0] >= $info['width'] || $position[1] >= $info['height'])
+            throw new PictureException('开始截取的位置超出图片范围');
+        if (($cutSize[0] + $position[0]) > $info['width'])
+            $cutSize[0] = $info['width'] - $position[0];
+        if (($cutSize[1] + $position[1]) > $info['height'])
+            $cutSize[1] = $info['height'] - $position[1];
         if ($info['suffix'] == 'gif') {
             foreach ($imageick as $frame) {
                 $frame->cropImage($cutSize[0], $cutSize[1], $position[0], $position[1]);
@@ -196,8 +202,11 @@ class ImagickMachine implements PictureInterface
             foreach ($imageick as $frame) {
                 $frame->rotateImage($color, $angle);
             }
-        } else
+        } else {
+            $expore = explode('.', basename($savePath));
+            if ($expore[1] == 'png') $color = new \ImagickPixel('none');
             $imageick->rotateImage($color, $angle);
+        }
         return $this->returnHandler($imageick, $savePath, $returnType, $quality);
     }
 
@@ -228,13 +237,81 @@ class ImagickMachine implements PictureInterface
                     $position[0],
                     $position[1]);
             }
-        } else
+        } else {
+            $compositeType = \Imagick::COMPOSITE_DEFAULT;
+            $saveSuffix = explode('.', basename($savePath));
+            if ($saveSuffix[1] != "png") $compositeType = \Imagick::COMPOSITE_ATOP;
             $backImageick->compositeImage(
                 $frontImageick,
-                $frontImageick->getImageCompose(),
+                $compositeType,
                 $position[0],
                 $position[1]);
+        }
         return $this->returnHandler($backImageick, $savePath, $returnType, $quality);
+    }
+
+    public function makeIdentifyCodePicture(
+        $code,
+        $savePath,
+        $params = [],
+        $quality = -1,
+        $returnType = 1
+    )
+    {
+        $defaultCofing = [
+            'size' => [100, 100],
+            'position' => [20, 30],
+            'noise_count' => rand(50, 90),
+            'bg_color' => [255, 255, 255],
+            'code_color' => [0, 0, 0],
+            'color' => [
+                [255, 0, 0],
+                [0, 255, 0],
+                [0, 0, 255],
+                [0, 0, 0],
+                [0, 255, 255],
+                [255, 255, 0],
+                [255, 0, 255]
+            ],
+            'font_size' => rand(13, 18),
+            'font_path' => './Attrl.ttl'
+        ];
+        if (!empty($params)) $defaultCofing = array_merge($defaultCofing, $params);
+        ParamsHandler::handleStart([
+            'code' => ['set|string', $code],
+            'position' => ['set|arr|position', $defaultCofing['position']],
+            'noise_count' => ['set|int|min:1', $defaultCofing['noise_count']],
+            'color' => ['set|arr', $defaultCofing['color']],
+            'bg_color' => ['set|arr', $defaultCofing['bg_color']],
+            'code_color' => ['set|arr', $defaultCofing['code_color']],
+            'font_size' => ['set|int|min:1', $defaultCofing['font_size']],
+            'font_path' => ['set|file', $defaultCofing['font_path']]
+        ]);
+        $imageIck = new \Imagick();
+        $pixel = new \ImagickPixel($this->makeColor($defaultCofing['bg_color']));
+        $imageIck->newImage($defaultCofing['size'][0], $defaultCofing['size'][1], $pixel);
+        $draw = new \ImagickDraw();
+        $draw->setFont($defaultCofing['font_path']);
+        $draw->setFontSize($defaultCofing['font_size']);
+        $draw->setFillColor(new \ImagickPixel($this->makeColor($defaultCofing['code_color'])));
+        $imageIck->annotateImage(
+            $draw,
+            $defaultCofing['position'][0],
+            $defaultCofing['position'][1],
+            rand(0, 45),
+            $code);
+        $colorSize = sizeof($defaultCofing['color']);
+        for ($i = 0; $i < $defaultCofing['noise_count']; $i++) {
+            $draw->setFillColor(new \ImagickPixel($this->makeColor($defaultCofing['color'][rand(0, $colorSize - 1)])));
+            $draw->setFontSize(rand(10, 60));
+            $imageIck->annotateImage(
+                $draw,
+                rand(0, $defaultCofing['size'][0]),
+                rand(0, $defaultCofing['size'][1]),
+                0,
+                '.');
+        }
+        return $this->returnHandler($imageIck, $savePath, $returnType, $quality);
     }
 
     public function text(
@@ -254,15 +331,15 @@ class ImagickMachine implements PictureInterface
             throw new PictureException('要写入的字符串不能为空');
         $imageick = new \Imagick();
         $info = $this->originPictureHander($imageick, $originPicture);
-        $checkResult = ParamsHandler::handleStart(
+        ParamsHandler::handleStart(
             [
                 'origin_width' => ['set|int|min:1', $info['width']],
                 'origin_height' => ['set|int|min:1', $info['height']],
                 'angle' => ['set|int', $angle],
             ]);
-        if (!$checkResult['font_size']) $fontSize = $this->nowConfig['font_size'];
-        if (!$checkResult['font_file']) $fontFile = $this->nowConfig['font_file'];
-        if (!$checkResult['font_color']) $fontColor = $this->nowConfig['font_color'];
+        if ($fontSize == NULL) $fontSize = $this->nowConfig['font_size'];
+        if ($fontFile == NULL) $fontFile = $this->nowConfig['font_file'];
+        if ($fontColor == NULL) $fontColor = $this->nowConfig['font_color'];
         $imageDraw = new \ImagickDraw();
         $imageDraw->setFont($fontFile);
         $imageDraw->setFontSize($fontSize);
@@ -274,55 +351,6 @@ class ImagickMachine implements PictureInterface
         } else
             $imageick->annotateImage($imageDraw, $position[0], $position[1], $angle, $string);
         return $this->returnHandler($imageick, $savePath, $returnType, $quality);
-    }
-
-    public function makeIdentifyCodePicture(
-        $code,
-        $savePath,
-        $params = [],
-        $quality = -1,
-        $returnType = 1
-    )
-    {
-        $defaultCofing = [
-            'size' => [100, 100],
-            'position' => [20, 30],
-            'noise_count' => rand(10, 20),
-            'color' => [
-                [255, 0, 0],
-                [0, 255, 0],
-                [0, 0, 255],
-                [0, 0, 0],
-                [0, 255, 255],
-                [255, 255, 0],
-                [255, 0, 255]
-            ],
-            'font_size' => rand(13, 18),
-            'font_path' => './Attrl.ttl'
-        ];
-        if (!empty($params)) $defaultCofing = array_merge($defaultCofing, $params);
-        ParamsHandler::handleStart([
-            'code' => ['set|string', $code],
-            'position' => ['set|arr|position', $defaultCofing['position']],
-            'noise_count' => ['set|int|min:1', $defaultCofing['noise_count']],
-            'color' => ['set|arr', $defaultCofing['color']],
-            'font_size' => ['set|int|min:1', $defaultCofing['font_size']],
-            'font_path' => ['set|file']
-        ]);
-        $imageIck = new \Imagick();
-        $pixel = new \ImagickPixel('white');
-        $imageIck->newImage($defaultCofing['size'][0], $defaultCofing['size'][1], $pixel);
-        $draw = new \ImagickDraw();
-        $draw->setFont($defaultCofing['font_path']);
-        $draw->setFontSize($defaultCofing['font_size']);
-        $imageIck->annotateImage(
-            $draw,
-            $defaultCofing['position'][0],
-            $defaultCofing['position'][1],
-            rand(0, 45),
-            $code);
-        $imageIck->addNoiseImage(\Imagick::NOISE_POISSON, \Imagick::CHANNEL_OPACITY);
-        return $this->returnHandler($imageIck, $savePath, $returnType, $quality);
     }
 
     private function supportPicture($type)
@@ -366,8 +394,22 @@ class ImagickMachine implements PictureInterface
             if (strlen($blue) < 2) $blue = '0' . $blue;
             $color = '#' . $red . $green . $blue;
         } else {
-            if (strlen($color) < 7 || $color{0} != '#')
-                $color = '#eeeeee';
+            if (strlen($color) < 4 || strlen($color) > 4 || $color{0} != '#') {
+                $color = '#eee';
+            } else {
+                $color = strtolower($color);
+                $splitColor = str_split($color, 1);
+                unset($splitColor[0]);
+                foreach ($splitColor as $lettler) {
+                    if ((ord($lettler) >= 97 && ord($lettler) <= 102) ||
+                        (ord($lettler) >= 48 && ord($lettler) <= 57)
+                    ) {
+                    } else {
+                        $color = '#eee';
+                        break;
+                    }
+                }
+            }
         }
         return $color;
     }
@@ -382,7 +424,11 @@ class ImagickMachine implements PictureInterface
             if (empty($name)) throw new PictureException('文件保存名字不能为空');
             $quality = $quality < 1 ? 100 : $quality;
             $imageick->setImageCompressionQuality($quality);
-            $imageick->writeImage($savePath);
+            $explor = explode('.', basename($savePath));
+            if ($explor[1] == 'gif')
+                $imageick->writeImages($savePath, true);
+            else
+                $imageick->writeImage($savePath);
             return $savePath;
         } elseif ($type == PictureFactory::RETURN_IMG_STRING) {
             return $imageick->__toString();
@@ -401,13 +447,18 @@ class ImagickMachine implements PictureInterface
             $imageick->readImage($originPicture);
             $info = $imageick->getImagePage();
         } elseif (is_string($originPicture)) {
-            $imageick->readImageBlob($originPicture);
-            $info = $imageick->getImagePage();
-            $suffix = $imageick->getFormat();
-            if (!$this->supportPicture($suffix))
-                throw new PictureException('当前不支持此文件类型');
-        } else
+            try {
+                $imageick->readImageBlob($originPicture);
+                $info = $imageick->getImagePage();
+                $suffix = $imageick->getFormat();
+                if (!$this->supportPicture($suffix))
+                    throw new PictureException('当前不支持此文件类型');
+            } catch (\Exception $e) {
+                throw new PictureException('图片字符串错误');
+            }
+        } else {
             throw new PictureException('当前不支持此类型文件');
+        }
         $info['suffix'] = $suffix;
         $info['name'] = $name;
         return $info;

@@ -58,10 +58,11 @@ class GdMachine implements PictureInterface
         );
     }
 
-    public function makeGif($images, $savePath , $tempPath='')
+    public function makeGif($images, $savePath, $tempPath = './')
     {
-        $gifMachine = new GifMachine();
-        return $gifMachine->gifStart($images,$savePath,$tempPath);
+        $gif = new GifMachine();
+        $result = $gif->gifStart($images, $savePath, $tempPath);
+        return $result;
     }
 
     public function scale(
@@ -73,10 +74,11 @@ class GdMachine implements PictureInterface
         $transparentColor = []
     )
     {
+        $this->checkReturnType($returnType);
         $originPicInfo = $this->getPictureInfo($originPicture);
-        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
-        $scaleWidth = 0;
-        $scaleHight = 0;
+        $originRes = $this->getPicRes($originPicInfo['suffix'], $originPicture);
+        $scaleWidth = $originPicInfo['width'];
+        $scaleHight = $originPicInfo['height'];
         $this->checkSize($size, $scaleWidth, $scaleHight);
         $saveRes = $this->createEmptyImage(
             $scaleWidth,
@@ -101,33 +103,38 @@ class GdMachine implements PictureInterface
         $position,
         $savePath = NULL,
         $quality = -1,
-        $returnType = 1
+        $returnType = 1,
+        $transparentColor = []
     )
     {
+        $this->checkReturnType($returnType);
         $backInfo = $this->getPictureInfo($backPicture);
         $frontInfo = $this->getPictureInfo($frontPicture);
-        $backRes = $this->getPicRes($backInfo['suffix'], $backPicture);
         $frontRes = $this->getPicRes($frontInfo['suffix'], $frontPicture);
         $x = 0;
         $y = 0;
         if (is_array($position)) {
-            if (is_int($position[0]) && $position[0] >= 0
-                &&
-                is_int($position[1] && $position[1] >= 0)
+            if (is_int($position[0]) && $position[0] >= 0 &&
+                is_int($position[1]) && $position[1] >= 0
             ) {
                 $x = $position[0] >= $backInfo['width'] ? $x : $position[0];
                 $y = $position[1] >= $backInfo['height'] ? $y : $position[1];
             }
         }
-        imagecopyresampled(
-            $backRes,
-            $frontRes,
-            $x, $y, 0, 0,
-            $backInfo['width'],
-            $backInfo['height'],
-            $frontInfo['width'],
-            $frontInfo['height']
+        $backRes = $this->getPicRes($backInfo['suffix'], $backPicture);
+        $restWidth = $backInfo['width'] - $x;
+        $restHeight = $backInfo['height'] - $y;
+        $restWidth = $restWidth > $frontInfo['width'] ? $frontInfo['width'] : $restWidth;
+        $restHeight = $restHeight > $frontInfo['height'] ? $frontInfo['height'] : $restHeight;
+        imagecopy(
+            $backRes, $frontRes,
+            $x, $y, 0, 0, $restWidth, $restHeight
         );
+        if ($backInfo['suffix'] == 'png' || $backInfo['suffix'] == 'bmp') {
+            $backRes = $this->scale(
+                $backRes, [$backInfo['width'], $backInfo['height']],
+                '', 9, 2, $transparentColor);
+        }
         return $this->returnHanler($returnType, $backRes, $savePath, $quality);
     }
 
@@ -141,35 +148,36 @@ class GdMachine implements PictureInterface
         $transparentColor = []
     )
     {
+        $this->checkReturnType($returnType);
         $originPicInfo = $this->getPictureInfo($originPicture);
-        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
+        $originRes = $this->getPicRes($originPicInfo['suffix'], $originPicture);
         $cutWidth = $cutSize[0];
         $cutHeight = $cutSize[1];
         $positionX = $poition[0];
         $positionY = $poition[1];
         $cutWidth =
             ($cutSize[0] + $positionX) > $originPicInfo['width'] ?
-                $originPicture['width'] - $positionX :
+                $originPicInfo['width'] - $positionX :
                 $cutSize[0];
         $cutHeight =
             ($cutSize[1] + $positionY) > $originPicInfo['height'] ?
-                $originPicture['height'] - $positionY :
+                $originPicInfo['height'] - $positionY :
                 $cutSize[1];
+        if ($cutHeight <= 0 || $cutWidth <= 0)
+            throw new PictureException('截取尺寸错误');
         $saveRes = $this->createEmptyImage(
-            $cutWidth,
-            $cutHeight,
-            empty($transparentColor) ?
-                $this->nowConfig['transparent_color'] :
-                $transparentColor
+            $cutWidth, $cutHeight,
+            empty($transparentColor) ? $this->nowConfig['transparent_color'] : $transparentColor
         );
-        imagecopyresampled(
+        imagecopy(
             $saveRes,
             $originRes,
-            0, 0, $positionX, $positionY,
+            0, 0,
+            $positionX,
+            $positionY,
             $cutWidth,
-            $cutHeight,
-            $originPicInfo['width'],
-            $originPicInfo['height']);
+            $cutHeight
+        );
         return $this->returnHanler($returnType, $saveRes, $savePath, $quality);
     }
 
@@ -182,8 +190,9 @@ class GdMachine implements PictureInterface
         $transparentColor = []
     )
     {
+        $this->checkReturnType($returnType);
         $originPicInfo = $this->getPictureInfo($originPicture);
-        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
+        $originRes = $this->getPicRes($originPicInfo['suffix'], $originPicture);
         if (!is_int($angle)) throw new PictureException('角度值不合法');
         $rotateSize = $this->getRotateSize($originPicInfo['width'], $originPicInfo['height'], $angle);
         $saveRes = $this->createEmptyImage(
@@ -191,12 +200,10 @@ class GdMachine implements PictureInterface
             $rotateSize['height'],
             empty($transparentColor) ? $this->nowConfig['transparent_color'] : $transparentColor
         );
-        imagecopyresampled(
+        imagecopy(
             $saveRes,
             $originRes,
             0, 0, 0, 0,
-            $rotateSize['width'],
-            $rotateSize['height'],
             $originPicInfo['width'],
             $originPicInfo['height']);
         $alphaColour = imagecolorallocatealpha(
@@ -205,7 +212,7 @@ class GdMachine implements PictureInterface
             $transparentColor[1],
             $transparentColor[2],
             127);
-        $resultRes = imagerotate($saveRes, $angle, $alphaColour, 0);
+        $resultRes = imagerotate($originRes, $angle, $alphaColour, 0);
         return $this->returnHanler($returnType, $resultRes, $savePath, $quality);
     }
 
@@ -219,7 +226,8 @@ class GdMachine implements PictureInterface
         $fontSize = NULL,
         $fontColor = NULL,
         $quality = -1,
-        $returnType = 1
+        $returnType = 1,
+        $transparentColor = []
     )
     {
         if (empty($string)) throw new PictureException('添加的字符串不能为空');
@@ -235,7 +243,7 @@ class GdMachine implements PictureInterface
                 'position' => ['set|arr|position', $position]
             ]);
         $originPicInfo = $this->getPictureInfo($originPicture);
-        $originRes = $this->getPicRes($originPicInfo['type'], $originPicture);
+        $originRes = $this->getPicRes($originPicInfo['suffix'], $originPicture);
         $textColor = imagecolorallocate(
             $originRes,
             $fontColor[0],
@@ -250,89 +258,12 @@ class GdMachine implements PictureInterface
             $textColor,
             $fontFile,
             $string);
+        if ($originPicInfo['suffix'] == 'png' || $originPicInfo['suffix'] == 'bmp') {
+            $originRes = $this->scale(
+                $originRes, [$originPicInfo['width'], $originPicInfo['height']],
+                '', 9, 2, $transparentColor);
+        }
         return $this->returnHanler($returnType, $originRes, $savePath, $quality);
-    }
-
-    public function makeIdentifyCodePicture(
-        $code,
-        $savePath,
-        $params = [],
-        $returnType = 1,
-        $quality = 100
-    )
-    {
-        $defaultCofing = [
-            'size' => [100, 100],
-            'position' => [20, 30],
-            'noise_count' => rand(10, 20),
-            'color' => [
-                [255, 0, 0],
-                [0, 255, 0],
-                [0, 0, 255],
-                [0, 0, 0],
-                [0, 255, 255],
-                [255, 255, 0],
-                [255, 0, 255]
-            ],
-            'font_size' => rand(13, 18),
-            'font_path' => './Attrl.ttl'
-        ];
-        if (!empty($params)) $defaultCofing = array_merge($defaultCofing, $params);
-        ParamsHandler::handleStart([
-            'code' => ['set|string', $code],
-            'position' => ['set|arr|position', $defaultCofing['position']],
-            'noise_count' => ['set|int|min:1', $defaultCofing['noise_count']],
-            'color' => ['set|arr', $defaultCofing['color']],
-            'font_size' => ['set|int|min:1', $defaultCofing['font_size']],
-            'font_path' => ['set|file']
-        ]);
-        $image = imagecreate($defaultCofing['size'][0], $defaultCofing['size'][1]);
-        imagefill(
-            $image,
-            0,
-            0,
-            imagecolorallocate($image, 255, 255, 255)
-        );
-        $this->text(
-            $image,
-            $defaultCofing['position'],
-            $code,
-            rand(0, 45),
-            $defaultCofing['font_path'],
-            $defaultCofing['font_size'],
-            [0, 0, 0],
-            100,
-            PictureFactory::RETURN_RES
-        );
-        $colorSize = sizeof($defaultCofing['color']);
-        $tempColor = NULL;
-        for ($i = 0; $i < $defaultCofing['noise_count']; $i++) {
-            $color = $defaultCofing['color'][rand(0, $colorSize - 1)];
-            $point1_x = rand(0, $defaultCofing['size'][0]);
-            $point1_y = rand(0, $defaultCofing['size'][1]);
-            $point2_x = rand(1, 2) == 1 ? $point1_x + rand(1, 4) : $point1_x - rand(1, 4);
-            $point2_y = rand(1, 2) == 1 ? $point1_y + rand(1, 4) : $point1_y - rand(1, 4);
-            $tempColor = imagecolorallocate($image, $color[0], $color[1], $color[2]);
-            imageline(
-                $image,
-                $point1_x,
-                $point1_y,
-                $point2_x,
-                $point2_y,
-                $tempColor
-            );
-        }
-        for ($i = 0; $i < $defaultCofing['noise_count']; $i++) {
-            $color = $defaultCofing['color'][rand(0, $colorSize - 1)];
-            $tempColor = imagecolorallocate($image, $color[0], $color[1], $color[2]);
-            imagesetpixel(
-                $image,
-                rand(0, $defaultCofing['size'][0]),
-                rand(0, $defaultCofing['size'][1]),
-                $tempColor
-            );
-        }
-        return $this->returnHanler($returnType, $image, $savePath, $quality);
     }
 
     public function changeConfig($params = NULL)
@@ -366,6 +297,97 @@ class GdMachine implements PictureInterface
         return true;
     }
 
+    public function makeIdentifyCodePicture(
+        $code,
+        $savePath,
+        $params = [],
+        $returnType = 1,
+        $quality = 100
+    )
+    {
+        $defaultCofing = [
+            'size' => [100, 100],
+            'position' => [20, 30],
+            'noise_count' => rand(10, 20),
+            'bg_color' => [255, 255, 255],
+            'code_color' => [0, 0, 0],
+            'color' => [
+                [255, 0, 0],
+                [0, 255, 0],
+                [0, 0, 255],
+                [0, 0, 0],
+                [0, 255, 255],
+                [255, 255, 0],
+                [255, 0, 255]
+            ],
+            'font_size' => rand(13, 18),
+            'font_path' => './Attrl.ttl'
+        ];
+        if (!empty($params)) $defaultCofing = array_merge($defaultCofing, $params);
+        ParamsHandler::handleStart([
+            'code' => ['set|string', $code],
+            'position' => ['set|arr|position', $defaultCofing['position']],
+            'noise_count' => ['set|int|min:1', $defaultCofing['noise_count']],
+            'color' => ['set|arr', $defaultCofing['color']],
+            'bg_color' => ['set|arr', $defaultCofing['bg_color']],
+            'code_color' => ['set|arr', $defaultCofing['code_color']],
+            'font_size' => ['set|int|min:1', $defaultCofing['font_size']],
+            'font_path' => ['set|file', $defaultCofing['font_path']]
+        ]);
+        $image = imagecreate($defaultCofing['size'][0], $defaultCofing['size'][1]);
+        imagefill(
+            $image,
+            0, 0,
+            imagecolorallocate(
+                $image,
+                $defaultCofing['bg_color'][0],
+                $defaultCofing['bg_color'][1],
+                $defaultCofing['bg_color'][2]
+            )
+        );
+        $this->text(
+            $image,
+            $defaultCofing['position'],
+            $code,
+            rand(0, -45),
+            '',
+            $defaultCofing['font_path'],
+            $defaultCofing['font_size'],
+            $defaultCofing['code_color'],
+            100,
+            PictureFactory::RETURN_RES
+        );
+        $colorSize = sizeof($defaultCofing['color']);
+        $tempColor = NULL;
+        for ($i = 0; $i < $defaultCofing['noise_count']; $i++) {
+            $color = $defaultCofing['color'][rand(0, $colorSize - 1)];
+            $point1_x = rand(0, $defaultCofing['size'][0]);
+            $point1_y = rand(0, $defaultCofing['size'][1]);
+            $point2_x = rand(1, 16) == 1 ? $point1_x + rand(1, 4) : $point1_x - rand(1, 4);
+            $point2_y = rand(1, 16) == 1 ? $point1_y + rand(1, 4) : $point1_y - rand(1, 4);
+            $tempColor = imagecolorallocate($image, $color[0], $color[1], $color[2]);
+            imageline(
+                $image,
+                $point1_x,
+                $point1_y,
+                $point2_x,
+                $point2_y,
+                $tempColor
+            );
+        }
+        for ($i = 0; $i < $defaultCofing['noise_count']; $i++) {
+            $color = $defaultCofing['color'][rand(0, $colorSize - 1)];
+            $tempColor = imagecolorallocate($image, $color[0], $color[1], $color[2]);
+            imagesetpixel(
+                $image,
+                rand(0, $defaultCofing['size'][0]),
+                rand(0, $defaultCofing['size'][1]),
+                $tempColor
+            );
+        }
+        return $this->returnHanler($returnType, $image, $savePath, $quality);
+    }
+
     private function getPictureInfo($string)
     {
         $result = [];
@@ -392,7 +414,11 @@ class GdMachine implements PictureInterface
                     'width' => imagesx($string),
                     'height' => imagesy($string),
                 ];
+            } else {
+                throw new PictureException('原图片数据错误或不存在');
             }
+        } else {
+            throw new PictureException('图片数据不能为空字符串');
         }
         return $result;
     }
@@ -407,7 +433,7 @@ class GdMachine implements PictureInterface
                 case 'jpg':
                 case 'gif':
                 case  'jpeg':
-                case 'pnd':
+                case 'png':
                 case 'bmp':
                     break;
                 default:
@@ -548,7 +574,7 @@ class GdMachine implements PictureInterface
                 throw new PictureException('scale 的伸缩尺寸为数组时数值格式错误');
             $width = $size[0];
             $height = $size[1];
-        } elseif (is_float($size) && $size > 0) {
+        } elseif ((is_float($size) || is_int($size)) && $size > 0) {
             $width = (int)($size * $width);
             $height = (int)($size * $height);
         } else throw new PictureException('scale 的size参数输入错误');
@@ -615,5 +641,11 @@ class GdMachine implements PictureInterface
             $this->savePicture($saveInfo['suffix'], $res, $savePath, $quality);
             return $savePath;
         }
+    }
+
+    private function checkReturnType($returnType)
+    {
+        if ($returnType != 1 && $returnType != 2 && $returnType != 3)
+            throw new PictureException("不支持当前输入的返回类型{$returnType}");
     }
 }

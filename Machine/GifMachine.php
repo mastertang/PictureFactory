@@ -6,30 +6,21 @@ use PictureFactory\Machine\GifMachineLib\GifEncoder;
 
 class GifMachine
 {
-    const mDelayTimeDefault = 100;//默认延时
-    const mOffest = 0;//默认图片偏移量
-    private $gifSavePath = '';//gif保存路径
-    private $pictureTempPath = '';//临时文件的保存路径
-    private $delayTime = [];//每张图片的延时时间
-    private $transparentColor = [];//透明颜色rgb
-    private $loopFlag = 1;//循环次数，默认1
-    private $disposalMethod = 0;//处置方法，默认0
-    private $offest = [];//每张图片的偏移量
-    private $picturePath = [];//每张图片的文件路径
-
-    private $config = [];
+    const mDelayTimeDefault = 100;  //默认延时
+    const mOffest = 0;              //默认图片偏移量
+    private $config = [];           //配置
     private $defaultConfig = [
-        'transparent_color' => [254, 254, 254],
-        'disposal_method' => 0,
-        'temp_path' => './',
-        'delay' => 1,
-        'loop' => 1,
-        'offset' => 0
+        'transparent_color' => [254, 254, 254], //透明颜色
+        'disposal_method' => 0,                 //处理方法
+        'temp_path' => './',                    //临时文件路径
+        'delay' => 1,                           //gif延时间隔
+        'loop' => 1,                            //循环
+        'offset' => 0                           //偏移量
     ];
 
     public function __construct()
     {
-        $configPath = '../Config/GifConfig.php';
+        $configPath = __DIR__ . '/../Config/GifConfig.php';
         if (is_file($configPath))
             $this->config = include $configPath;
         $this->config = array_merge($this->defaultConfig, $this->config);
@@ -37,7 +28,7 @@ class GifMachine
             'transparent_color' => ['set|arr|color', $this->config['transparent_color']],
             'disposal_method' => ['set|int|min:0', $this->config['disposal_method']],
             'delay' => ['set|min:0', $this->config['delay']],
-            'loop' => ['set|int|min:1', $this->config['loop']],
+            'loop' => ['set|int|min:0', $this->config['loop']],
             'offset' => ['set|min:0', $this->config['offset']]
         ]);
         if (empty($this->config['temp_path'])) $this->config['temp_path'] = './';
@@ -78,9 +69,8 @@ class GifMachine
         $tempPicPath = [];
         foreach ($picturePath as $picture) {
             $pictureInfo = getimagesize($picture);//获取图片信息
-            $pictureSource = $this->createImage($picturePath, $pictureInfo['mime']);
-            if (is_resource($pictureSource))
-                continue;
+            $pictureSource = $this->createImage($picture, $pictureInfo['mime']);
+            if (!is_resource($pictureSource)) continue;
             $newCanvasSource = NULL;
             $this->createCanvas($newCanvasSource, $pictureInfo[0], $pictureInfo[1]);
             $result = imagecopyresampled(
@@ -103,19 +93,19 @@ class GifMachine
             $pictureTempPath = NULL;
         }
         if (empty($tempPicPath)) throw new PictureException('所有素材文件都错误');
-        return $this->start($tempPicPath, $savePath, $color);
+        return $this->start($tempPicPath, $savePath);
     }
 
-    private function start(&$tempPicPath, &$savePath, &$color)
+    private function start(&$tempPicPath, &$savePath)
     {
         try {
             $gif = new GifEncoder(
                 $tempPicPath,
-                $this->delayTime,
-                $this->loopFlag,
-                $this->disposalMethod, //构造函数传入参数初始化
-                $this->offest,
-                $color);
+                $this->config['delay'],
+                $this->config['loop'],
+                $this->config['disposal_method'], //构造函数传入参数初始化
+                $this->config['offset'],
+                $this->config['transparent_color']);
             $gif->encodeStart();          //开始进行合成
             $file = fopen($savePath, 'w');//把二进制数据写入文件
             fwrite($file, $gif->getAnimation());

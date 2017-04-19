@@ -79,25 +79,13 @@ Class GifEncoder
     )
     {
         if (empty($resource)) throw new PictureException('没有可用于合成的图片');
-        $resourceSize = sizeof($this->picture);
-        if (is_array($offest[0])) {
-            foreach ($offest as $key => $value) {
-                if (!is_array($value))
-                    $offest[$key] = [0, 0];
-            }
-        } else
-            $offest = [[0, 0]];
-        $offestSize = sizeof($offest);
-        $this->SIG = 1;
-        $offest = array_fill($offestSize, $resourceSize - $offestSize, [0, 0]);
-        if (is_array($delayTime)) {
-            foreach ($delayTime as $key => $value) {
-                if (!is_int($value) || $value < 0) $delayTime[$key] = 0;
-            }
-        } elseif (!is_int($delayTime) || $delayTime < 0)
-            $delayTime = [0];
-        $delayTimeSize = sizeof($delayTime);
-        $delayTime = array_fill($delayTimeSize, $resourceSize - $delayTimeSize, 0);
+        $resourceSize = sizeof($resource);
+        if (!is_array($offest)) $offest = [$offest];
+        if (!is_array($delayTime)) $delayTime = [$delayTime];
+        for ($i = 0; $i < $resourceSize; $i++) {
+            if (!isset($offest[$i])) $offest[$i] = $offest[0];
+            if (!isset($delayTime[$i])) $delayTime[$i] = $delayTime[0];
+        }
         $loopFlag > -1 or $loopFlag = 0;//循环播放次数，$_loopFlag大于-1为$_loopFlag,小于则为0
         (is_int($disposalMethod) && $disposalMethod >= 0 && $disposalMethod <= 3) or $disposalMethod = 0;//处置方法的值为0，1，2，3
         (is_int($color[0]) && $color[0] >= 1 && $color[0] <= 255) or $color[0] = 254;
@@ -116,7 +104,7 @@ Class GifEncoder
     public function encodeStart()
     {
         $pictureSize = sizeof($this->picture);
-        $newGifHead = NULL;
+        $newGifHead = $this->gifHeader;
         $firstPictureBinary = NULL;
         $globalColorSize = 0;
         $globalColorTable = '';
@@ -128,6 +116,7 @@ Class GifEncoder
             $globalColorTable,
             $globalColorPixel
         );//添加头部
+        var_dump($pictureSize);
         for ($i = 0; $i < $pictureSize; $i++) {//添加头像信息
             GifEncoder::addFrames(
                 $i,
@@ -177,7 +166,6 @@ Class GifEncoder
         $headInfo = substr($pictureBuffer, 0, 6);
         if ($headInfo != "GIF87a" && $headInfo != "GIF89a")
             return NULL;//检查文件的头信息的前6byte是否为GIF87a或GIF89a，不是就代表不是gif文件
-        unset($headInfo);
         $localColorPixel = ord($pictureBuffer{10}) & 0x07;
         $localColorSize = 2 << $localColorPixel;//获取局部颜色数目
         $localColorTable = substr($pictureBuffer, 13, 3 * $localColorSize); //获取此图片的颜色数目
@@ -245,9 +233,9 @@ Class GifEncoder
         if ($localColorTableFlag) {
             $lengthResult = $globalColorSize == $localColorSize ? true : false;
             $tableResult = GifEncoder::colorTableBlockCompare($globalColorTable, $localColorTable, $globalColorSize);
-            if ($lengthResult && $tableResult)
+            if ($lengthResult && $tableResult) {
                 $gifHeader .= $localExtensionBlock . $localImageData . $localPictureContent;
-            if (!$lengthResult || ($lengthResult && !$tableResult)) {
+            } else if (!$lengthResult || ($lengthResult && !$tableResult)) {
                 if ($this->SIG == 1) {//设置图像标识符的x，y方向偏移
                     $localImageData{1} = chr($this->offest[$index][0] & 0xFF);
                     $localImageData{2} = chr(($this->offest[$index][0] & 0xFF00) >> 8);
@@ -262,7 +250,7 @@ Class GifEncoder
                 else
                     $byte |= $localColorPixel;//设置pixel为局部颜色列表的pixel值
                 $localImageData{9} = chr($byte);
-                $this->gifHeader .= ($localExtensionBlock . $localImageData . $localColorTable . $localPictureContent);
+                $gifHeader .= ($localExtensionBlock . $localImageData . $localColorTable . $localPictureContent);
             }
         } else {//没有颜色列表就直接添加了
             $gifHeader .= ($localExtensionBlock . $localImageData . $localPictureContent);
@@ -277,6 +265,7 @@ Class GifEncoder
         &$localColorTable
     )
     {
+        var_dump($this->delayTime[$index]);
         $char1 = $this->disposalMethod << 2;
         $char2 = chr(($this->delayTime[$index] >> 0) & 0xFF);
         $char3 = chr(($this->delayTime[$index] >> 8) & 0xFF);
@@ -317,14 +306,14 @@ Class GifEncoder
         return $result;
     }
 
+    public function getAnimation()
+    {
+        return $this->newGifDinary;
+    }
+
     private function gifWord($_int)
     {
         return (chr($_int & 0xFF) . chr(($_int >> 8) & 0xFF));
-    }
-
-    public function getAnimation()
-    {
-        return ($this->newGifDinary);
     }
 
 //  检查是否有扩展块，$j的开始值为全局颜色列表的后一个byte位置，13代表GIF头信息6byte+逻辑屏幕块7byte，
