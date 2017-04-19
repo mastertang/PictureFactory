@@ -104,15 +104,20 @@ class ImagickMachine implements PictureInterface
         if (is_array($images)) {
             $imageick = new \Imagick();
             $tempick = NULL;
+            $firstWidth = 0;
+            $firstHeight = 0;
+            $i = 0;
             foreach ($images as $image) {
                 $tempick = new \Imagick();
                 if (is_file($image))
                     $tempick->readImage($image);
                 elseif (is_string($image))
                     $tempick->readImageBlob($image);
+                $this->gifFit($tempick, $i, $firstWidth, $firstHeight);
                 $imageick->addImage($tempick);
                 $imageick->setImageDelay(100);
                 $imageick->setImageDispose(2);
+                $i++;
             }
         } elseif (is_string($images)) {
             $imageick = new \Imagick($images);
@@ -120,6 +125,36 @@ class ImagickMachine implements PictureInterface
             throw new PictureException('图片参数格式错误');
         $imageick->writeImages($savePath, true);
         return $savePath;
+    }
+
+    private function gifFit(\Imagick &$image, $index, &$firstWidth, &$firstHeight)
+    {
+        $info = $image->getImagePage();
+        if ($index == 0) {
+            $firstWidth = $info['width'];
+            $firstHeight = $info['height'];
+        }
+        $scaleWidth = 0;
+        $scaleHeight = 0;
+        if ($info['width'] > $firstWidth) {
+            $num = $firstWidth / $info['width'];
+            $numHeight = (int)($info['height'] * $num);
+            if ($numHeight <= $firstHeight) {
+                $scaleWidth = $firstWidth;
+                $scaleHeight = $numHeight;
+            }
+        }
+        if ($info['height'] > $firstHeight) {
+            $num = $firstHeight / $info['height'];
+            $numWidth = (int)($info['width'] * $num);
+            if ($numWidth <= $firstWidth) {
+                $scaleWidth = $numWidth;
+                $scaleHeight = $firstHeight;
+            }
+        }
+        if ($scaleWidth != 0 && $scaleHeight != 0) {
+            $image->scaleImage($scaleWidth, $scaleHeight);
+        }
     }
 
     public function scale(

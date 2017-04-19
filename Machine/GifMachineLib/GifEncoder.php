@@ -233,6 +233,7 @@ Class GifEncoder
             $lengthResult = $globalColorSize == $localColorSize ? true : false;
             $tableResult = GifEncoder::colorTableBlockCompare($globalColorTable, $localColorTable, $globalColorSize);
             if ($lengthResult && $tableResult) {
+                echo $index . ":";
                 $gifHeader .= $localExtensionBlock . $localImageData . $localPictureContent;
             } else if (!$lengthResult || ($lengthResult && !$tableResult)) {
                 if ($this->SIG == 1) {//设置图像标识符的x，y方向偏移
@@ -241,6 +242,7 @@ Class GifEncoder
                     $localImageData{3} = chr($this->offest[$index][1] & 0xFF);
                     $localImageData{4} = chr(($this->offest[$index][1] & 0xFF00) >> 8);
                 }
+                echo $index.":";
                 $byte = ord($localImageData{9});//图像标识块的第10个byte(m i s r pixel)
                 $byte |= 0x80;//将m置为1
                 $byte &= 0xF8;//将pixel置为000
@@ -249,10 +251,10 @@ Class GifEncoder
                 else
                     $byte |= $localColorPixel;//设置pixel为局部颜色列表的pixel值
                 $localImageData{9} = chr($byte);
-                $gifHeader .= ($localExtensionBlock . $localImageData . $localColorTable . $localPictureContent);
+                $gifHeader .= $localExtensionBlock . $localImageData . $localColorTable . $localPictureContent;
             }
         } else {//没有颜色列表就直接添加了
-            $gifHeader .= ($localExtensionBlock . $localImageData . $localPictureContent);
+            $gifHeader .= $localExtensionBlock . $localImageData . $localPictureContent;
         }
     }
 
