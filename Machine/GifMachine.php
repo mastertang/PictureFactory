@@ -32,13 +32,23 @@ class GifMachine
             'offset' => ['set|min:0', $this->config['offset']]
         ]);
         if (empty($this->config['temp_path'])) $this->config['temp_path'] = './';
+        if (!empty($this->config['gif_size'])) {
+            if (!is_array($this->config['gif_size']) ||
+                !is_int($this->config['gif_size'][0]) ||
+                !is_int($this->config['gif_size'][1]) ||
+                $this->config['gif_size'][0] <= 0 ||
+                $this->config['gif_size'][1] <= 0
+            ) {
+                $this->config['gif_size'] = [100, 100];
+            }
+        }
         if (!is_dir($this->config['temp_path'])) {
             $mkresult = mkdir($this->config['temp_path'], 0775);
             if (!$mkresult) throw new PictureException('临时文件夹创建失败');
         }
     }
 
-    private function checkStartParams(&$picturePath, &$savePath, &$tempPath, &$saveName)
+    private function checkStartParams(&$picturePath, &$savePath, &$tempPath, &$saveName, &$gifSize, $transparentColor)
     {
         if (!is_array($picturePath))
             $picturePath = [$picturePath];
@@ -60,28 +70,55 @@ class GifMachine
         } else {
             $tempPath = $this->config['temp_path'];
         }
+        if (!empty($transparentColor) && is_array($transparentColor)) {
+            if ($transparentColor[0] >= 0 && $transparentColor[0] <= 255 &&
+                $transparentColor[1] >= 0 && $transparentColor[1] <= 255 &&
+                $transparentColor[2] >= 0 && $transparentColor[2] <= 255
+            )
+                $this->config['transparent_color'] = $transparentColor;
+        }
+        if (!empty($gifSize)) {
+            if (!is_array($gifSize)) $gifSize = 0;
+            if (!is_int($gifSize[0]) || !is_int($gifSize[1]) ||
+                $gifSize[0] <= 0 || $gifSize[1] <= 0
+            )
+                $gifSize = 0;
+        }
     }
 
-    public function gifStart($picturePath, $savePath, $tempPath = '')
+    public function gifStart($picturePath, $savePath, $gifSize = [], $tempPath = '', $transparentColor = [])
     {
         $saveName = NULL;
-        $this->checkStartParams($picturePath, $savePath, $tempPath, $saveName);
+        $this->checkStartParams($picturePath, $savePath, $tempPath, $saveName, $gifSize, $transparentColor);
         $tempPicPath = [];
+        $index = 0;
+        $firstWidth = 0;
+        $firstHeight = 0;
+        if (!empty($gifSize)) {
+            $firstWidth = $gifSize[0];
+            $firstHeight = $gifSize[1];
+        }
+        $scaleWidth = 0;
+        $scaleHeight = 0;
         foreach ($picturePath as $picture) {
             $pictureInfo = getimagesize($picture);//获取图片信息
             $pictureSource = $this->createImage($picture, $pictureInfo['mime']);
             if (!is_resource($pictureSource)) continue;
+            $this->gifFit($pictureSource, $index, $firstWidth, $firstHeight, $scaleWidth, $scaleHeight);
             $newCanvasSource = NULL;
-            $this->createCanvas($newCanvasSource, $pictureInfo[0], $pictureInfo[1]);
+            $this->createCanvas($newCanvasSource, $firstWidth, $firstHeight);
             $result = imagecopyresampled(
                 $newCanvasSource,
                 $pictureSource,
                 0, 0, 0, 0,
-                $pictureInfo[0],
-                $pictureInfo[1],
+                $scaleWidth,
+                $scaleHeight,
                 $pictureInfo[0],
                 $pictureInfo[1]);
-            if (empty($result)) continue;
+            if (empty($result)) {
+                $index++;
+                continue;
+            }
             $pictureTempPath = $tempPath . DIRECTORY_SEPARATOR . $saveName . uniqid() . '.gif';
             $tempPicPath[] = $pictureTempPath;
             imagegif($newCanvasSource, $pictureTempPath);
@@ -91,9 +128,49 @@ class GifMachine
             $pictureSource = NULL;
             $newCanvasSource = NULL;
             $pictureTempPath = NULL;
+            $index++;
         }
         if (empty($tempPicPath)) throw new PictureException('所有素材文件都错误');
         return $this->start($tempPicPath, $savePath);
+    }
+
+    private function gifFit(
+        &$image,
+        $index,
+        &$firstWidth,
+        &$firstHeight,
+        &$scaleWidth,
+        &$scaleHeight
+    )
+    {
+        $width = imagesx($image);
+        $height = imagesy($image);
+        if ($index == 0 && $firstWidth == 0 && $firstWidth == 0) {
+            $firstWidth = $width;
+            $firstHeight = $height;
+        }
+        $scaleWidth = 0;
+        $scaleHeight = 0;
+        if ($width > $firstWidth) {
+            $num = $firstWidth / $width;
+            $numHeight = (int)($height * $num);
+            if ($numHeight <= $firstHeight) {
+                $scaleWidth = $firstWidth;
+                $scaleHeight = $numHeight;
+            }
+        }
+        if ($height > $firstHeight) {
+            $num = $firstHeight / $height;
+            $numWidth = (int)($width * $num);
+            if ($numWidth <= $firstWidth) {
+                $scaleWidth = $numWidth;
+                $scaleHeight = $firstHeight;
+            }
+        }
+        if ($scaleWidth == 0 && $scaleHeight == 0) {
+            $scaleWidth = $width;
+            $scaleHeight = $height;
+        }
     }
 
     private function start(&$tempPicPath, &$savePath)

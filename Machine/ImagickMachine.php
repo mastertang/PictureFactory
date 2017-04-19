@@ -91,7 +91,7 @@ class ImagickMachine implements PictureInterface
         return $this->returnHandler($imageick, $savePath, $returnType, $quality);
     }
 
-    public function makeGif($images, $savePath, $delay = 100, $dispose = 2)
+    public function makeGif($images, $savePath, $delay = 100, $dispose = 2, $gifSize = [])
     {
         ParamsHandler::handleStart(
             [
@@ -106,6 +106,14 @@ class ImagickMachine implements PictureInterface
             $tempick = NULL;
             $firstWidth = 0;
             $firstHeight = 0;
+            if (!empty($gifSize) && is_array($gifSize)) {
+                if (is_int($gifSize[0]) && is_int($gifSize[1]) &&
+                    $gifSize[0] > 0 && $gifSize[1] > 0
+                ) {
+                    $firstWidth = $gifSize[0];
+                    $firstHeight = $gifSize[0];
+                }
+            }
             $i = 0;
             foreach ($images as $image) {
                 $tempick = new \Imagick();
@@ -130,7 +138,7 @@ class ImagickMachine implements PictureInterface
     private function gifFit(\Imagick &$image, $index, &$firstWidth, &$firstHeight)
     {
         $info = $image->getImagePage();
-        if ($index == 0) {
+        if ($index == 0 && $firstWidth == 0 && $firstHeight == 0) {
             $firstWidth = $info['width'];
             $firstHeight = $info['height'];
         }

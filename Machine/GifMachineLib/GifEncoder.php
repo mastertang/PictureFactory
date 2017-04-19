@@ -91,7 +91,7 @@ Class GifEncoder
         (is_int($color[0]) && $color[0] >= 1 && $color[0] <= 255) or $color[0] = 254;
         (is_int($color[1]) && $color[1] >= 1 && $color[1] <= 255) or $color[1] = 254;
         (is_int($color[2]) && $color[2] >= 1 && $color[2] <= 255) or $color[2] = 254;
-        $this->color = chr(($color[0] >> 0) & 0xFF) . chr(($color[1] >> 8) & 0xFF) . chr(($color[2] >> 16) & 0xFF);
+        $this->color = chr($color[0]) . chr($color[1]) . chr($color[2]);
         $this->disposalMethod = $disposalMethod;
         $this->loop = $loopFlag;
         $this->delayTime = $delayTime;
@@ -182,7 +182,6 @@ Class GifEncoder
             $index,
             $localExtensionBlock,
             $localColorTableFlag,
-            $localColorSize,
             $localColorTable);
         $localImageData = '';
         switch ($localPictureContent{0}) {
@@ -233,7 +232,6 @@ Class GifEncoder
             $lengthResult = $globalColorSize == $localColorSize ? true : false;
             $tableResult = GifEncoder::colorTableBlockCompare($globalColorTable, $localColorTable, $globalColorSize);
             if ($lengthResult && $tableResult) {
-                echo $index . ":";
                 $gifHeader .= $localExtensionBlock . $localImageData . $localPictureContent;
             } else if (!$lengthResult || ($lengthResult && !$tableResult)) {
                 if ($this->SIG == 1) {//设置图像标识符的x，y方向偏移
@@ -242,7 +240,6 @@ Class GifEncoder
                     $localImageData{3} = chr($this->offest[$index][1] & 0xFF);
                     $localImageData{4} = chr(($this->offest[$index][1] & 0xFF00) >> 8);
                 }
-                echo $index.":";
                 $byte = ord($localImageData{9});//图像标识块的第10个byte(m i s r pixel)
                 $byte |= 0x80;//将m置为1
                 $byte &= 0xF8;//将pixel置为000
@@ -262,7 +259,6 @@ Class GifEncoder
         &$index,
         &$localExtensionBlock,
         &$localColorTableFlag,
-        &$localColorSize,
         &$localColorTable
     )
     {
@@ -272,9 +268,10 @@ Class GifEncoder
         $localExtensionBlock = "!\xF9\x04" . chr($char1 + 0) . $char2 . $char3 . "\x0\x0";
         if (isset($this->color) && $localColorTableFlag) {//如果有透明颜色就设置拓展块的透明颜色索引,$this->mColor为透明颜色的索引值
             $localSpilt = str_split($localColorTable, 3);
-            for ($i = 0; $i < $localColorSize; $i++) {
+            $spiltSize = sizeof($localSpilt);
+            for ($i = 0; $i < $spiltSize; $i++) {
                 if ($localSpilt[$i] == $this->color) {
-                    $localExtensionBlock = "!\xF9\x04" . chr(($char1 + 1)) . $char2 . $char3 . '\x0';
+                    $localExtensionBlock = "!\xF9\x04" . chr(($char1 + 1)) . $char2 . $char3 . chr($i) ."\x0";
                     break;
                 }
             }

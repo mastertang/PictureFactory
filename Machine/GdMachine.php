@@ -58,10 +58,10 @@ class GdMachine implements PictureInterface
         );
     }
 
-    public function makeGif($images, $savePath, $tempPath = './')
+    public function makeGif($images, $savePath, $gifSize = [], $tempPath = './', $transparentColor = [])
     {
         $gif = new GifMachine();
-        $result = $gif->gifStart($images, $savePath, $tempPath);
+        $result = $gif->gifStart($images, $savePath, $gifSize, $tempPath, $transparentColor);
         return $result;
     }
 
