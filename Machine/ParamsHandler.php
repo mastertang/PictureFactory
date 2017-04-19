@@ -26,7 +26,6 @@ class ParamsHandler
     {
         $valueArray = explode(':', $value);
         $func = $valueArray[0];
-        var_dump($data);
         return self::$func($valueArray[1], $data);
     }
 

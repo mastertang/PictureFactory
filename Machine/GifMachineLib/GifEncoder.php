@@ -116,7 +116,6 @@ Class GifEncoder
             $globalColorTable,
             $globalColorPixel
         );//添加头部
-        var_dump($pictureSize);
         for ($i = 0; $i < $pictureSize; $i++) {//添加头像信息
             GifEncoder::addFrames(
                 $i,
@@ -265,7 +264,6 @@ Class GifEncoder
         &$localColorTable
     )
     {
-        var_dump($this->delayTime[$index]);
         $char1 = $this->disposalMethod << 2;
         $char2 = chr(($this->delayTime[$index] >> 0) & 0xFF);
         $char3 = chr(($this->delayTime[$index] >> 8) & 0xFF);
