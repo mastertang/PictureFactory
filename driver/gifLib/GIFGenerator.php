@@ -1,6 +1,5 @@
 <?php
-namespace PictureFactory\Machine\GifMachineLib;
-use PictureFactory\Machine\GifMachineLib\GifEncoder;
+namespace PictureFactory\driver\gifLib;
 
 /*
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
